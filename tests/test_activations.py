@@ -1,53 +1,137 @@
+# test_activation_functions.py
+
 import unittest
 import numpy as np
-from src.activations import SigmoidActivation, ReLUActivation, SoftmaxActivation
+from src.activations import (
+    ActivationFunctionType,
+    get_activation_function,
+    StepActivation,
+    SigmoidActivation,
+    ReLUActivation
+)
 
 
-class TestActivations(unittest.TestCase):
-    def setUp(self):
-        self.sigmoid = SigmoidActivation()
-        self.relu = ReLUActivation()
-        self.softmax = SoftmaxActivation()
+class TestActivationFunctions(unittest.TestCase):
+
+    def test_get_activation_function(self):
+        """Testea que get_activation_function devuelve la instancia correcta."""
+        # Probar tipos válidos
+        self.assertIsInstance(get_activation_function(ActivationFunctionType.STEP), StepActivation)
+        self.assertIsInstance(get_activation_function(ActivationFunctionType.SIGMOID), SigmoidActivation)
+        self.assertIsInstance(get_activation_function(ActivationFunctionType.RELU), ReLUActivation)
+
+        # Probar tipo no válido
+        with self.assertRaises(ValueError):
+            get_activation_function(None)
+        with self.assertRaises(ValueError):
+            get_activation_function("INVALID_TYPE")
+
+    def test_step_activation(self):
+        """Prueba la función de activación escalón (StepActivation)."""
+        act_func = StepActivation()
+
+        # Valores escalares
+        self.assertEqual(act_func.activate(-1), 0.0)
+        self.assertEqual(act_func.activate(0), 1.0)
+        self.assertEqual(act_func.activate(1), 1.0)
+
+        # Arrays de entrada
+        x = np.array([-2, -1, 0, 1, 2])
+        expected_output = np.array([0.0, 0.0, 1.0, 1.0, 1.0])
+        np.testing.assert_array_equal(act_func.activate(x), expected_output)
+
+        # Derivada (debe ser cero en todos los puntos)
+        expected_derivative = np.zeros_like(x)
+        np.testing.assert_array_equal(act_func.derivative(x), expected_derivative)
 
     def test_sigmoid_activation(self):
-        x = np.array([-1, 0, 1])
-        expected = 1 / (1 + np.exp(-x))
-        output = self.sigmoid.activate(x)
-        np.testing.assert_array_almost_equal(output, expected, decimal=5)
+        """Prueba la función de activación sigmoide (SigmoidActivation)."""
+        act_func = SigmoidActivation()
 
-    def test_sigmoid_derivative(self):
-        x = -1.0
-        expected = 1 / (1 + np.exp(-x)) * (1 - 1 / (1 + np.exp(-x)))
-        output = self.sigmoid.derivative(x)
-        self.assertAlmostEqual(output, expected, places=5)
+        # Valores escalares
+        self.assertAlmostEqual(act_func.activate(0.0), 0.5, places=7)
+        self.assertAlmostEqual(act_func.activate(-1.0), 1 / (1 + np.exp(1)), places=7)
+        self.assertAlmostEqual(act_func.activate(1.0), 1 / (1 + np.exp(-1)), places=7)
+
+        # Arrays de entrada
+        x = np.array([-1000, -1, 0, 1, 1000])
+        # Utilizar la versión actualizada de activate que maneja clipping
+        expected_output = 1 / (1 + np.exp(-np.clip(x, -500, 500)))
+        np.testing.assert_allclose(act_func.activate(x), expected_output, rtol=1e-5, atol=1e-8)
+
+        # Derivada
+        sig = act_func.activate(x)
+        expected_derivative = sig * (1 - sig)
+        np.testing.assert_allclose(act_func.derivative(x), expected_derivative, rtol=1e-5, atol=1e-8)
 
     def test_relu_activation(self):
-        x = np.array([-1, 0, 1])
-        expected = np.maximum(0, x)
-        output = self.relu.activate(x)
-        np.testing.assert_array_equal(output, expected)
+        """Prueba la función de activación ReLU (ReLUActivation)."""
+        act_func = ReLUActivation()
 
-    def test_relu_derivative(self):
-        self.assertEqual(self.relu.derivative(-0.5), 0.0)
-        self.assertEqual(self.relu.derivative(0.0), 0.0)
-        self.assertEqual(self.relu.derivative(0.5), 1.0)
+        # Valores escalares
+        self.assertEqual(act_func.activate(-1), 0.0)
+        self.assertEqual(act_func.activate(0), 0.0)
+        self.assertEqual(act_func.activate(1), 1.0)
 
-    def test_softmax_activation(self):
-        x = np.array([2.0, 1.0, 0.1])
-        exps = np.exp(x - np.max(x))
-        expected = exps / np.sum(exps)
-        output = self.softmax.activate(x)
-        np.testing.assert_array_almost_equal(output, expected, decimal=5)
+        # Arrays de entrada
+        x = np.array([-2, -1, 0, 1, 2])
+        expected_output = np.array([0.0, 0.0, 0.0, 1.0, 2.0])
+        np.testing.assert_array_equal(act_func.activate(x), expected_output)
 
-    def test_softmax_activation_large_values(self):
-        x = np.array([1000, 1001, 1002])
-        output = self.softmax.activate(x)
-        expected = np.exp(x - np.max(x)) / np.sum(np.exp(x - np.max(x)))
-        np.testing.assert_array_almost_equal(output, expected, decimal=5)
+        # Derivada
+        expected_derivative = np.where(x > 0, 1.0, 0.0)
+        np.testing.assert_array_equal(act_func.derivative(x), expected_derivative)
 
-    def test_softmax_derivative(self):
-        # Como la derivada de Softmax se maneja con la entropía cruzada, esta prueba solo verifica el valor placeholder
-        self.assertEqual(self.softmax.derivative(1.0), 1.0)
+    def test_activation_function_interface(self):
+        """Verifica que todas las funciones de activación implementan la interfaz correctamente."""
+        for act_type in ActivationFunctionType:
+            act_func = get_activation_function(act_type)
+            self.assertTrue(hasattr(act_func, 'activate'))
+            self.assertTrue(hasattr(act_func, 'derivative'))
+
+    def test_activation_functions_with_extreme_values(self):
+        """Prueba las funciones de activación con valores extremos."""
+        x = np.array([-1e10, -1e5, 0, 1e5, 1e10])
+
+        # StepActivation
+        act_func = StepActivation()
+        expected_output = np.array([0.0, 0.0, 1.0, 1.0, 1.0])
+        np.testing.assert_array_equal(act_func.activate(x), expected_output)
+
+        # SigmoidActivation
+        act_func = SigmoidActivation()
+        # Usar la versión actualizada de activate que maneja clipping
+        expected_output = 1 / (1 + np.exp(-np.clip(x, -500, 500)))
+        np.testing.assert_allclose(act_func.activate(x), expected_output, atol=1e-7)
+
+        # Derivada
+        sig = act_func.activate(x)
+        expected_derivative = sig * (1 - sig)
+        np.testing.assert_allclose(act_func.derivative(x), expected_derivative, atol=1e-7)
+
+        # ReLUActivation
+        act_func = ReLUActivation()
+        expected_output = np.array([0.0, 0.0, 0.0, 1e5, 1e10])
+        np.testing.assert_array_equal(act_func.activate(x), expected_output)
+
+    def test_derivative_numerical_approximation(self):
+        """Comprueba que la derivada analítica coincide con la numérica."""
+        delta = 1e-5
+        x = np.linspace(-1, 1, 10)
+
+        # SigmoidActivation
+        act_func = SigmoidActivation()
+        numerical_derivative = (act_func.activate(x + delta) - act_func.activate(x - delta)) / (2 * delta)
+        analytical_derivative = act_func.derivative(x)
+        np.testing.assert_allclose(numerical_derivative, analytical_derivative, rtol=1e-4, atol=1e-6)
+
+        # ReLUActivation
+        act_func = ReLUActivation()
+        numerical_derivative = (act_func.activate(x + delta) - act_func.activate(x - delta)) / (2 * delta)
+        analytical_derivative = act_func.derivative(x)
+        # Ignorar el punto donde x=0 debido a la discontinuidad
+        mask = x != 0
+        np.testing.assert_allclose(numerical_derivative[mask], analytical_derivative[mask], atol=1e-6)
 
 
 if __name__ == '__main__':

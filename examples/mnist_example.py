@@ -3,6 +3,7 @@
 import numpy as np
 from src.neural_network import NeuralNetwork
 from src.activations import ActivationFunctionType
+import os
 
 
 def load_mnist():
@@ -39,10 +40,10 @@ def main():
     # Paso 2: Crear e inicializar la red neuronal
     topology = [784, 128, 64, 10]
     activation_type = ActivationFunctionType.RELU
-    learning_rate = 0.01
-    epochs = 5
+    learning_rate = 0.001
+    epochs = 50
     batch_size = 64
-    dropout_rate = 0.2
+    dropout_rate = 0.0
 
     print("Inicializando la red neuronal...")
     nn = NeuralNetwork(
@@ -57,27 +58,23 @@ def main():
     print("Entrenando la red neuronal...")
     nn.train(X_train, y_train, batch_size=batch_size)
 
+
     # Paso 4: Evaluar la red en el conjunto de prueba
     print("Evaluando la red en el conjunto de prueba...")
     accuracy_before_saving = nn.evaluate(X_test, y_test)
     print(f"Precisión antes de guardar los pesos: {accuracy_before_saving * 100:.2f}%")
 
-    # Paso 5: Guardar los pesos entrenados
-    weight_file = 'mnist_weights.npz'
+    # Paso 5: Guardar los pesos entrenados (incluyendo la topología y activación)
+    weight_folder = 'weights'
+    if not os.path.exists(weight_folder):
+        os.makedirs(weight_folder)
+    weight_file = os.path.join(weight_folder, 'mnist_weights.npz')
     nn.save_weights(weight_file)
-    print(f"Pesos guardados en '{weight_file}'.")
+    print(f"Pesos y configuración guardados en '{weight_file}'.")
 
-    # Paso 6: Crear una nueva instancia de la red y cargar los pesos
-    print("Creando una nueva instancia de la red neuronal...")
-    nn_loaded = NeuralNetwork(
-        topology=topology,
-        activation_type=activation_type,
-        learning_rate=learning_rate,
-        epochs=epochs,
-        dropout_rate=dropout_rate
-    )
-    nn_loaded.load_weights(weight_file)
-    print(f"Pesos cargados desde '{weight_file}'.")
+    # Paso 6: Crear una nueva instancia de la red usando from_weights_file
+    print("Creando una nueva instancia de la red neuronal desde el archivo de pesos...")
+    nn_loaded = NeuralNetwork.from_weights_file(weight_file)
 
     # Paso 7: Evaluar la nueva instancia en el conjunto de prueba
     print("Evaluando la nueva instancia de la red en el conjunto de prueba...")
@@ -89,6 +86,16 @@ def main():
         print("La precisión es la misma antes y después de cargar los pesos.")
     else:
         print("La precisión difiere después de cargar los pesos.")
+
+    # Verificar que las predicciones son iguales
+    print("Verificando que las predicciones son iguales...")
+    predictions_original = nn.predict(X_test[:10])
+    predictions_loaded = nn_loaded.predict(X_test[:10])
+
+    if np.allclose(predictions_original, predictions_loaded, atol=1e-6):
+        print("Las predicciones son iguales en ambas redes.")
+    else:
+        print("Las predicciones difieren entre las redes.")
 
     # Opcional: Eliminar el archivo de pesos si no se necesita
     # os.remove(weight_file)

@@ -23,6 +23,8 @@ class NeuralNetwork:
         self.layers: List[Layer] = []
         self.learning_rate: float = learning_rate
         self.epochs: int = epochs
+        self.activation_type = activation_type
+        self.dropout_rate: float = dropout_rate
 
         for i in range(1, len(topology)):
             layer_dropout_rate = dropout_rate if i < len(topology) - 1 else 0.0
@@ -33,6 +35,12 @@ class NeuralNetwork:
                 dropout_rate=layer_dropout_rate
             )
             self.layers.append(layer)
+
+    def get_topology(self) -> List[int]:
+        topology = [self.layers[0].perceptrons[0].weights.shape[0]]  # Número de entradas de la primera capa
+        for layer in self.layers:
+            topology.append(len(layer.perceptrons))
+        return topology
 
     def forward(self, inputs: np.ndarray, training: bool = True) -> np.ndarray:
         if inputs.shape[1] != self.layers[0].perceptrons[0].weights.shape[0]:
@@ -112,12 +120,15 @@ class NeuralNetwork:
         logits = self.forward(inputs, training=False)
 
         # Aplicar softmax para obtener probabilidades
-        exp_logits = np.exp(logits - np.max(logits))
-        softmax_probs = exp_logits / np.sum(exp_logits)
+        exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
+        softmax_probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
         return softmax_probs
 
     def save_weights(self, file_path: str) -> None:
         data = {}
+        data['topology'] = self.get_topology()
+        data['activation_type'] = self.activation_type.name
+        data['dropout_rate'] = self.dropout_rate  # Guardar el dropout_rate
         for layer_num, layer in enumerate(self.layers):
             layer_weights = [perceptron.weights.tolist() for perceptron in layer.perceptrons]
             layer_biases = [perceptron.bias for perceptron in layer.perceptrons]
@@ -136,6 +147,35 @@ class NeuralNetwork:
             layer_weights = data[f'layer_{layer_num}_weights']
             layer_biases = data[f'layer_{layer_num}_biases']
             for perceptron, w, b in zip(self.layers[layer_num].perceptrons, layer_weights, layer_biases):
-                perceptron.weights = np.array(w).astype(np.float32)
+                perceptron.weights = w.astype(np.float32)
                 perceptron.bias = np.float32(b)
         print(f"Pesos cargados desde '{file_path}'.")
+
+    @staticmethod
+    def from_weights_file(file_path: str) -> 'NeuralNetwork':
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"El archivo '{file_path}' no existe.")
+        data = np.load(file_path, allow_pickle=True)
+        topology = data['topology'].tolist()
+        activation_name = data['activation_type'].item()
+        activation_type = ActivationFunctionType[activation_name]
+        dropout_rate = data['dropout_rate'].item()  # Cargar el dropout_rate
+
+        # Crear una nueva instancia de la red con la topología, activación y dropout cargados
+        nn = NeuralNetwork(
+            topology=topology,
+            activation_type=activation_type,
+            dropout_rate=dropout_rate  # Pasar el dropout_rate al constructor
+        )
+
+        # Cargar los pesos y biases
+        num_layers = len(nn.layers)
+        for layer_num in range(num_layers):
+            layer_weights = data[f'layer_{layer_num}_weights']
+            layer_biases = data[f'layer_{layer_num}_biases']
+            for perceptron, w, b in zip(nn.layers[layer_num].perceptrons, layer_weights, layer_biases):
+                perceptron.weights = np.array(w).astype(np.float32)
+                perceptron.bias = np.float32(b)
+        print(f"Red neuronal creada y pesos cargados desde '{file_path}'.")
+        return nn
+

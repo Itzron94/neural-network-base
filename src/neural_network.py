@@ -27,6 +27,7 @@ class NeuralNetwork:
         self.dropout_rate: float = dropout_rate
 
         for i in range(1, len(topology)):
+            # No aplicar dropout en la capa de salida
             layer_dropout_rate = dropout_rate if i < len(topology) - 1 else 0.0
             layer = Layer(
                 num_perceptrons=topology[i],
@@ -37,7 +38,7 @@ class NeuralNetwork:
             self.layers.append(layer)
 
     def get_topology(self) -> List[int]:
-        topology = [self.layers[0].perceptrons[0].weights.shape[0]]  # Número de entradas de la primera capa
+        topology = [self.layers[0].perceptrons[0].weights.shape[0]]
         for layer in self.layers:
             topology.append(len(layer.perceptrons))
         return topology
@@ -125,10 +126,10 @@ class NeuralNetwork:
         return softmax_probs
 
     def save_weights(self, file_path: str) -> None:
-        data = {}
-        data['topology'] = self.get_topology()
-        data['activation_type'] = self.activation_type.name
-        data['dropout_rate'] = self.dropout_rate  # Guardar el dropout_rate
+        data = {'topology': self.get_topology(),
+                'activation_type': self.activation_type.name,
+                'dropout_rate': self.dropout_rate
+                }
         for layer_num, layer in enumerate(self.layers):
             layer_weights = [perceptron.weights.tolist() for perceptron in layer.perceptrons]
             layer_biases = [perceptron.bias for perceptron in layer.perceptrons]

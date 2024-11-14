@@ -58,7 +58,6 @@ def main():
     print("Entrenando la red neuronal...")
     nn.train(X_train, y_train, batch_size=batch_size)
 
-
     # Paso 4: Evaluar la red en el conjunto de prueba
     print("Evaluando la red en el conjunto de prueba...")
     accuracy_before_saving = nn.evaluate(X_test, y_test)

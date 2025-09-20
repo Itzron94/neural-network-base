@@ -1,5 +1,5 @@
 import tkinter as tk
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageOps, ImageTk
 import numpy as np
 from src.neural_network import NeuralNetwork
 from tkinter import messagebox
@@ -8,7 +8,6 @@ import os
 bg_color = '#3C3D37'
 frame_color = '#181C14'
 text_color = '#ECDFCC'
-btn_color = '#697565'
 
 
 class App:
@@ -39,10 +38,9 @@ class App:
         self.predict_button = tk.Button(
             btn_frame,
             text="Predecir",
-            font=("Helvetica", 15,),
+            font=("Helvetica", 15),
             command=self.predict_digit,
-            width=10,
-            #borderwidth=0
+            width=10
         )
         self.predict_button.pack(side=tk.LEFT, padx=5)
 
@@ -51,14 +49,18 @@ class App:
             text="Borrar",
             font=("Helvetica", 15),
             command=self.clear_canvas,
-            width=10,
-            #borderwidth=0
+            width=10
         )
         self.clear_button.pack(side=tk.LEFT, padx=5)
 
         # Etiqueta para mostrar el resultado
         self.result_label = tk.Label(self.root, text="", font=("Helvetica", 18, 'bold'), fg=text_color, bg=bg_color)
         self.result_label.pack(pady=10)
+
+        # Contenedor para la imagen preprocesada (será visible después de la predicción)
+        self.image_frame = tk.Frame(self.root, bg=bg_color)
+        self.image_label = tk.Label(self.image_frame, bg=bg_color)
+        self.image_label.pack()
 
         # Evento de dibujo
         self.canvas.bind("<B1-Motion>", self.draw)
@@ -71,22 +73,27 @@ class App:
         weight_file = '../weights/mnist_weights_98.npz'
         if not os.path.exists(weight_file):
             messagebox.showerror("Error", f"No se encontró el archivo de pesos '{weight_file}'.")
-            self.root.destroy()  # Cerrar la aplicación si no se encuentra el modelo
+            self.root.destroy()
         else:
             self.nn = NeuralNetwork.from_weights_file(weight_file)
+
+        # Variable para almacenar la imagen preprocesada
+        self.processed_image = None
 
     def draw(self, event):
         x = event.x
         y = event.y
-        r = 6  # Radio del pincel
+        r = 10  # Radio del pincel
         self.canvas.create_oval(x - r, y - r, x + r, y + r, fill='black', outline='black')
         self.draw_image.ellipse([x - r, y - r, x + r, y + r], fill='black')
 
     def clear_canvas(self):
         self.canvas.delete("all")
         self.draw_image.rectangle([0, 0, self.canvas_width, self.canvas_height], fill='white')
-        # Limpiar la etiqueta de resultado
+        # Limpiar la etiqueta de resultado y la imagen preprocesada
         self.result_label.config(text="")
+        self.image_frame.pack_forget()
+        self.processed_image = None
 
     def predict_digit(self):
         # Escalar proporcionalmente el dígito
@@ -108,17 +115,37 @@ class App:
         upper_left = ((28 - new_size[0]) // 2, (28 - new_size[1]) // 2)
         new_image.paste(resized_image, upper_left)
 
-        new_image.save("preprocessed_image.png")
+        # Guardar la imagen preprocesada para mostrarla si se requiere
+        self.processed_image = new_image
 
+        # Convertir a arreglo NumPy y normalizar
         image_array = np.array(new_image).astype(np.float32) / 255.0
         image_array = image_array.reshape(1, 28 * 28)
 
+        # Realizar predicción
         prediction = self.nn.predict(image_array)
         predicted_digit = np.argmax(prediction)
         probability = np.max(prediction) * 100
 
         # Mostrar el resultado en la etiqueta
         self.result_label.config(text=f"Dígito predicho: {predicted_digit}\nProbabilidad: {probability:.2f}%")
+
+        # Mostrar la imagen preprocesada en la interfaz
+        self.display_processed_image()
+
+    def display_processed_image(self):
+        """Muestra la imagen preprocesada en la interfaz."""
+        if self.processed_image:
+            # Redimensionar para que sea más visible (por ejemplo, 140x140 píxeles)
+            display_image = self.processed_image.resize((140, 140), Image.NEAREST)
+            processed_img_tk = ImageTk.PhotoImage(display_image)
+
+            # Actualizar la etiqueta de imagen
+            self.image_label.config(image=processed_img_tk)
+            self.image_label.image = processed_img_tk  # Guardar referencia para evitar que la imagen se borre
+
+            # Mostrar el frame de la imagen en la interfaz
+            self.image_frame.pack(pady=10)
 
 
 if __name__ == '__main__':

@@ -4,3 +4,4 @@ tensorflow~=2.17.0
 future~=0.18.3
 Pillow~=9.4.0
 setuptools~=68.2.0
+pygame~=2.6.1

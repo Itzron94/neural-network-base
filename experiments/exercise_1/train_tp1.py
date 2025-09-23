@@ -88,13 +88,12 @@ def train_perceptron(problem_type: str, learning_rate: float = 0.1, max_epochs: 
     
     # Crear perceptrón usando la clase existente
     perceptron = Perceptron(num_inputs=2, activation_type="STEP_BIPOLAR")
-    
     print(f"\nParámetros:")
     print(f"  - Learning rate: {learning_rate}")
     print(f"  - Max epochs: {max_epochs}")
     print(f"  - Seed: {seed}")
     print(f"  - Pesos iniciales: [{perceptron.weights[0]:.4f}, {perceptron.weights[1]:.4f}]")
-    print(f"  - Bias inicial: {perceptron.bias:.4f}")
+    print(f"  - Bias inicial: {perceptron.weights[-1]:.4f}")
     
     # Algoritmo de entrenamiento clásico del perceptrón
     print(f"\n--- INICIANDO ENTRENAMIENTO ---")
@@ -122,14 +121,13 @@ def train_perceptron(problem_type: str, learning_rate: float = 0.1, max_epochs: 
                 
                 # Actualización manual de pesos (algoritmo clásico de perceptrón)
                 # w = w + lr * error * x
-                perceptron.weights += learning_rate * error * inputs
-                
+                perceptron.weights[:-1] += learning_rate * error * inputs
                 # b = b + lr * error
-                perceptron.bias += learning_rate * error
+                perceptron.weights[-1] += learning_rate * error
                 
                 print(f"  Época {epoch+1:2d}, Muestra {i+1}: Error={error:2}, "
                       f"Pesos=[{perceptron.weights[0]:6.3f}, {perceptron.weights[1]:6.3f}], "
-                      f"Bias={perceptron.bias:6.3f}")
+                      f"Bias={perceptron.weights[-1]:6.3f}")
         
         # Calcular accuracy de la época
         predictions = []
@@ -169,7 +167,7 @@ def train_perceptron(problem_type: str, learning_rate: float = 0.1, max_epochs: 
     final_accuracy = np.mean(np.array(final_predictions) == y)
     print(f"\nAccuracy: {final_accuracy:.3f} ({final_accuracy*100:.1f}%)")
     print(f"Pesos finales: [{perceptron.weights[0]:.4f}, {perceptron.weights[1]:.4f}]")
-    print(f"Bias final: {perceptron.bias:.4f}")
+    print(f"Bias final: {perceptron.weights[-1]:.4f}")
     
     # Mostrar frontera de decisión
     if abs(perceptron.weights[1]) < 1e-10:
@@ -177,7 +175,7 @@ def train_perceptron(problem_type: str, learning_rate: float = 0.1, max_epochs: 
         print(f"  Línea vertical: x1 = {-perceptron.bias / perceptron.weights[0]:.4f}")
     else:
         slope = -perceptron.weights[0] / perceptron.weights[1]
-        intercept = -perceptron.bias / perceptron.weights[1]
+        intercept = -perceptron.weights[-1] / perceptron.weights[1]
         print(f"\nFrontera de decisión:")
         print(f"  Ecuación: x2 = {slope:.4f} * x1 + {intercept:.4f}")
     

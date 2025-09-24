@@ -3,15 +3,11 @@
 import numpy as np
 from typing import Optional
 from .activations import ActivationFunction, ActivationFunctionFactory
-from .optimizers import OptimizerFunction, OptimizerFunctionFactory
-from ..config import OptimizerConfig, WeightInitConfig
-
-BIAS = 1
+from ..config import WeightInitConfig
 
 
 class Perceptron:
-    def __init__(self, num_inputs: int, activation_type: str, 
-                 optimizer_config: Optional[OptimizerConfig] = None,
+    def __init__(self, num_inputs: int, activation_type: str,
                  weight_init_config: Optional[WeightInitConfig] = None) -> None:
         if num_inputs <= 0:
             raise ValueError("El número de entradas 'num_inputs' debe ser mayor que cero.")
@@ -19,21 +15,18 @@ class Perceptron:
         # Use default configs if not provided
         if weight_init_config is None:
             weight_init_config = WeightInitConfig()
-        if optimizer_config is None:
-            optimizer_config = OptimizerConfig()
 
-        self.weights: np.ndarray = self._initialize_weights(num_inputs + BIAS, weight_init_config)
+        self.weights: np.ndarray = self._initialize_weights(num_inputs+1, weight_init_config)
         self.activation: ActivationFunction = ActivationFunctionFactory.create(activation_type)
         self.last_input: np.ndarray = np.array([])
         self.last_total: np.ndarray = np.array([])
         self.last_output: np.ndarray = np.array([])
-        self.optimizer: OptimizerFunction = self._create_optimizer(optimizer_config)
 
     def calculate_output(self, inputs: np.ndarray) -> np.ndarray:
         if inputs.shape[1] != self.weights.shape[0] - 1:
             raise ValueError(f"El número de características en 'inputs' ({inputs.shape[1]}) debe ser {self.weights.shape[0] - 1}.")
         
-        bias_column = np.ones((inputs.shape[0], BIAS), dtype=np.float32)
+        bias_column = np.ones((inputs.shape[0], 1), dtype=np.float32)
         inputs_with_bias = np.hstack([inputs, bias_column])
         
         self.last_input = inputs_with_bias
@@ -53,6 +46,10 @@ class Perceptron:
         if self.last_total.size == 0:
             raise ValueError("calculate_output debe ser llamado antes de get_activation_derivative.")
         return self.activation.derivative(self.last_total)
+    
+    def get_bias(self) -> float:
+        """Get the bias term (last weight)."""
+        return self.weights[-1]
 
     def _initialize_weights(self, num_inputs: int, weight_config: WeightInitConfig) -> np.ndarray:
         """Initialize weights based on configuration."""
@@ -69,14 +66,3 @@ class Perceptron:
             return (np.random.randn(num_inputs) * 0.1).astype(np.float32)
         else:
             raise ValueError(f"Tipo de inicialización de pesos no soportado: {init_type}")
-
-    def _create_optimizer(self, optimizer_config: OptimizerConfig) -> OptimizerFunction:
-        """Create optimizer instance based on configuration."""
-        # Pass all optimizer config parameters, factory will filter what each optimizer needs
-        return OptimizerFunctionFactory.create(
-            optimizer_config.type,
-            beta1=optimizer_config.beta1,
-            beta2=optimizer_config.beta2,
-            epsilon=optimizer_config.epsilon,
-            momentum=optimizer_config.momentum
-        )

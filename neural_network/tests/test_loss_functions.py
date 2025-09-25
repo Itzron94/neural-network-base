@@ -2,7 +2,7 @@
 
 import unittest
 import numpy as np
-from neural_network.losses.functions import softmax_cross_entropy_with_logits
+from neural_network.core.losses.functions import softmax_cross_entropy_with_logits
 
 
 class TestSoftmaxCrossEntropyWithLogits(unittest.TestCase):

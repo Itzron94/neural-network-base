@@ -34,12 +34,6 @@ class Perceptron:
         self.last_output = self.activation.activate(self.last_total)
         return self.last_output
 
-    def update_weights(self, delta: np.ndarray, learning_rate: float) -> None:
-        if self.last_input.size == 0:
-            raise ValueError("El método 'calculate_output' debe ser llamado antes de 'update_weights'.")
-
-        gradients = np.dot(self.last_input.T, delta) / delta.shape[0]
-        self.weights = self.optimizer.update(self.weights, gradients, learning_rate)
 
     def get_activation_derivative(self) -> np.ndarray:
         """Get derivative of the activation function at the last output."""

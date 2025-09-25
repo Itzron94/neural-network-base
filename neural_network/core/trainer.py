@@ -15,7 +15,7 @@ class Trainer:
             optimizer_config = OptimizerConfig()
         self.optimizer: OptimizerFunction = self._create_optimizer(optimizer_config)
 
-    def train(self, training_inputs: np.ndarray, training_labels: np.ndarray, batch_size: int = 32) -> None:
+    def train(self, training_inputs: np.ndarray, training_labels: np.ndarray, batch_size: int = 32, verbose=False) -> None:
         if training_inputs.shape[0] != training_labels.shape[0]:
             raise ValueError("El número de muestras en 'training_inputs' y 'training_labels' debe ser el mismo.")
 
@@ -48,9 +48,10 @@ class Trainer:
                 for l in range(len(self.network.layers) - 2, -1, -1):
                     current_layer = self.network.layers[l]
                     next_layer = self.network.layers[l + 1]
-                    weights_next_layer = np.array([p.weights[:-1] for p in next_layer.perceptrons]) #Excluir el bias
+                    weights_next_layer = next_layer.weights[:-1, :] #Excluir el bias
+                    #weights_next_layer = np.array([p.weights[:-1] for p in next_layer.perceptrons]) #Excluir el bias
                     delta_next = deltas[0]
-                    delta = np.dot(delta_next, weights_next_layer) * current_layer.get_activation_derivative()
+                    delta = np.dot(delta_next, weights_next_layer.transpose()) * current_layer.get_activation_derivative()
                     deltas.insert(0, delta)
 
                 all_gradients = []
@@ -68,7 +69,7 @@ class Trainer:
                     all_gradients.append(layer_gradients)
                 self.optimizer.update_network(self.network, all_gradients, self.learning_rate)
                     
-            if epoch % 10 == 0 or epoch == 1:
+            if verbose and (epoch % 10 == 0 or epoch == 1):
                 print(f"Época {epoch}/{self.epochs} - Pérdida: {total_loss}")
     def _create_optimizer(self, optimizer_config: OptimizerConfig) -> OptimizerFunction:
         """Create optimizer instance 

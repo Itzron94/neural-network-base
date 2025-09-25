@@ -32,13 +32,13 @@ class NeuralNetwork:
             self.layers.append(layer)
 
     def get_topology(self) -> List[int]:
-        topology = [self.layers[0].perceptrons[0].weights.shape[0]]
+        topology = [self.layers[0].weights.shape[0]-1]  # Número de entradas (excluyendo el bias)
         for layer in self.layers:
-            topology.append(len(layer.perceptrons))
+            topology.append(layer.weights.shape[1])  # Número de perceptrones en la capa
         return topology
 
     def forward(self, inputs: np.ndarray, training: bool = True) -> np.ndarray:
-        if inputs.shape[1] != (self.layers[0].perceptrons[0].weights.shape[0]-1): #Se tiene en cuenta el bias
+        if inputs.shape[1] != (self.layers[0].weights.shape[0]-1): #Se tiene en cuenta el bias
             raise ValueError("El número de características en las entradas no coincide con el esperado por la red.")
         for layer in self.layers:
             inputs = layer.forward(inputs, training=training)
@@ -70,10 +70,8 @@ class NeuralNetwork:
                 'dropout_rate': self.dropout_rate
                 }
         for layer_num, layer in enumerate(self.layers):
-            layer_weights = [perceptron.weights[:-1].tolist() for perceptron in layer.perceptrons]
-            layer_biases = [perceptron.get_bias() for perceptron in layer.perceptrons]
+            layer_weights = layer.weights
             data[f'layer_{layer_num}_weights'] = layer_weights
-            data[f'layer_{layer_num}_biases'] = layer_biases
         np.savez(file_path, **data)
         print(f"Pesos guardados en '{file_path}'.")
 
@@ -82,14 +80,10 @@ class NeuralNetwork:
             raise FileNotFoundError(f"El archivo '{file_path}' no existe.")
 
         data = np.load(file_path, allow_pickle=True)
-        print(data['layer_0_weights'])
-        print(data['layer_0_biases'])
         num_layers = len(self.layers)
         for layer_num in range(num_layers):
             layer_weights = data[f'layer_{layer_num}_weights']
-            layer_biases = data[f'layer_{layer_num}_biases']
-            for perceptron, w, b in zip(self.layers[layer_num].perceptrons, layer_weights, layer_biases):
-                perceptron.weights = np.concatenate((w, [b])).astype(np.float32)  # Asegurarse de que el bias esté incluido
+            self.layers[layer_num].weights = layer_weights
         print(f"Pesos cargados desde '{file_path}'.")
 
     @staticmethod
@@ -112,9 +106,7 @@ class NeuralNetwork:
         num_layers = len(nn.layers)
         for layer_num in range(num_layers):
             layer_weights = data[f'layer_{layer_num}_weights']
-            layer_biases = data[f'layer_{layer_num}_biases']
-            for perceptron, w, b in zip(nn.layers[layer_num].perceptrons, layer_weights, layer_biases):
-                perceptron.weights = np.concatenate((w, [b])).astype(np.float32)  # Asegurarse de que el bias esté incluido
+            nn.layers[layer_num].weights = layer_weights
         print(f"Red neuronal creada y pesos cargados desde '{file_path}'.")
         return nn
 

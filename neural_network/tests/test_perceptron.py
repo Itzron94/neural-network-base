@@ -8,7 +8,7 @@ from neural_network.core.activations import (
     SigmoidActivation,
     ReLUActivation
 )
-from neural_network.config import OptimizerConfig, WeightInitConfig
+from neural_network.config import WeightInitConfig
 
 
 class TestPerceptron(unittest.TestCase):
@@ -27,8 +27,6 @@ class TestPerceptron(unittest.TestCase):
         # Verificar función de activación
         self.assertIsInstance(perceptron.activation, SigmoidActivation)
 
-        # Verificar optimizer existe
-        self.assertIsNotNone(perceptron.optimizer)
 
     def test_calculate_output(self):
         """Prueba el método calculate_output."""
@@ -59,27 +57,6 @@ class TestPerceptron(unittest.TestCase):
         np.testing.assert_array_equal(perceptron.last_total, total_input)
         np.testing.assert_array_equal(perceptron.last_output, output)
 
-    def test_update_weights(self):
-        """Prueba el método update_weights con el optimizador."""
-        num_inputs = 4
-        perceptron = Perceptron(num_inputs, activation_type="SIGMOID")
-
-        # Configurar entradas y delta conocidos (incluye bias column)
-        perceptron.last_input = np.array([[0.1, 0.2, 0.3, 0.4, 1.0]], dtype=np.float32)
-        delta = np.array([0.5], dtype=np.float32)
-        learning_rate = 0.01
-
-        # Guardar copia de pesos antes de la actualización
-        weights_before = perceptron.weights.copy()
-
-        # Actualizar pesos
-        perceptron.update_weights(delta, learning_rate)
-
-        # Verificar que los pesos cambiaron
-        self.assertFalse(np.array_equal(perceptron.weights, weights_before))
-
-        # Verificar que las dimensiones son correctas
-        self.assertEqual(perceptron.weights.shape[0], num_inputs + 1)
 
     def test_integration_with_activation_functions(self):
         """Prueba la integración con diferentes funciones de activación."""
@@ -130,34 +107,6 @@ class TestPerceptron(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(derivative, expected_derivative)
 
-    def test_update_weights_without_previous_forward(self):
-        """Verifica que update_weights maneja adecuadamente si calculate_output no ha sido llamado."""
-        num_inputs = 3
-        perceptron = Perceptron(num_inputs, activation_type="SIGMOID")
-        delta = np.array([0.5], dtype=np.float32)
-        learning_rate = 0.01
-
-        # Intentar actualizar pesos sin haber llamado a calculate_output
-        with self.assertRaises(ValueError):
-            perceptron.update_weights(delta, learning_rate)
-
-    def test_weight_updates_with_batch_inputs(self):
-        """Prueba update_weights con batch de entradas y deltas."""
-        num_inputs = 2
-        perceptron = Perceptron(num_inputs, activation_type="SIGMOID")
-        # last_input debe incluir la columna de bias para batch
-        perceptron.last_input = np.array([[1.0, 2.0, 1.0], [3.0, 4.0, 1.0]], dtype=np.float32)  # Batch con bias
-        delta = np.array([0.1, -0.2], dtype=np.float32)  # Batch de deltas
-        learning_rate = 0.01
-
-        # Guardar pesos antes de la actualización
-        weights_before = perceptron.weights.copy()
-
-        # Actualizar pesos
-        perceptron.update_weights(delta, learning_rate)
-
-        # Verificar que los pesos se actualizan
-        self.assertFalse(np.array_equal(perceptron.weights, weights_before))
 
     def test_weight_initialization_types(self):
         """Prueba diferentes tipos de inicialización de pesos."""
@@ -173,19 +122,6 @@ class TestPerceptron(unittest.TestCase):
         perceptron = Perceptron(num_inputs, "SIGMOID", weight_init_config=weight_config)
         np.testing.assert_array_equal(perceptron.weights, np.ones(num_inputs + 1, dtype=np.float32))
 
-    def test_optimizer_configuration(self):
-        """Prueba la configuración de diferentes optimizadores."""
-        num_inputs = 2
-        
-        # Test SGD optimizer
-        optimizer_config = OptimizerConfig(type="SGD")
-        perceptron = Perceptron(num_inputs, "SIGMOID", optimizer_config=optimizer_config)
-        self.assertIsNotNone(perceptron.optimizer)
-        
-        # Test Adam optimizer
-        optimizer_config = OptimizerConfig(type="ADAM", beta1=0.8, beta2=0.99)
-        perceptron = Perceptron(num_inputs, "SIGMOID", optimizer_config=optimizer_config)
-        self.assertIsNotNone(perceptron.optimizer)
 
 
 if __name__ == '__main__':

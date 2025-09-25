@@ -3,6 +3,7 @@
 import unittest
 import numpy as np
 import os
+from ..config import OptimizerConfig
 from neural_network.core.network import NeuralNetwork
 from neural_network.core.losses import softmax_cross_entropy_with_logits
 from neural_network.core.trainer import Trainer
@@ -29,11 +30,10 @@ class TestNeuralNetwork(unittest.TestCase):
         # Verificar que las capas se crearon correctamente
         self.assertEqual(len(nn.layers), len(topology) - 1)
 
-        # Verificar que cada capa tiene el número correcto de perceptrones
+        # Verificar que cada capa tiene el número correcto de neuronas y pesos
         for i, layer in enumerate(nn.layers):
-            self.assertEqual(len(layer.perceptrons), topology[i + 1])
-            for perceptron in layer.perceptrons:
-                self.assertEqual(perceptron.weights.shape[0]-1, topology[i])
+            self.assertEqual(layer.weights.shape[1], topology[i + 1])
+            self.assertEqual(layer.weights.shape[0] - 1, topology[i])
 
         # Verificar que los parámetros se asignan correctamente
         self.assertEqual(tr.learning_rate, learning_rate)
@@ -76,21 +76,24 @@ class TestNeuralNetwork(unittest.TestCase):
 
         # Convertir etiquetas a formato one-hot
         labels_one_hot = np.hstack([1 - labels, labels])  # Shape: (4, 2)
-        # Verificar que los pesos han cambiado (no se verifica numéricamente)
-        initial_weights = [layer.perceptrons[0].weights.copy() for layer in nn.layers]
+
+        # Guardar pesos iniciales de cada capa
+        initial_weights = [layer.weights.copy() for layer in nn.layers]
         # Entrenar la red
         tr.train(inputs, labels_one_hot, batch_size=4)
         for i, layer in enumerate(tr.network.layers):
-            self.assertFalse(np.array_equal(layer.perceptrons[0].weights, initial_weights[i]))
+            self.assertFalse(np.array_equal(layer.weights, initial_weights[i]))
 
     def test_evaluate(self):
         """Prueba el método evaluate con datos sintéticos."""
-        learning_rate = 0.1
-        epochs = 5000
+        learning_rate = 10
+        epochs = 2000
+        opt_config = OptimizerConfig(type="SGD")
         topology = [2, 4, 2]  # Aumentar el número de neuronas en la capa oculta
         nn = NeuralNetwork(topology=topology, activation_type="SIGMOID")
         tr = Trainer(learning_rate=learning_rate, epochs=epochs,
-                    loss_func=softmax_cross_entropy_with_logits, network=nn)
+                    loss_func=softmax_cross_entropy_with_logits,
+                    network=nn, optimizer_config=opt_config)
         # Datos sintéticos (XOR problem)
         inputs = np.array([[0, 0],
                            [0, 1],
@@ -105,7 +108,7 @@ class TestNeuralNetwork(unittest.TestCase):
         labels_one_hot = np.hstack([1 - labels, labels])  # Shape: (4, 2)
 
         # Entrenar la red
-        tr.train(inputs, labels_one_hot, batch_size=4)
+        tr.train(inputs, labels_one_hot, batch_size=4, verbose=True)
 
         # Evaluar en los mismos datos
         accuracy = tr.network.evaluate(inputs, labels_one_hot)
@@ -137,9 +140,8 @@ class TestNeuralNetwork(unittest.TestCase):
 
         # Configurar pesos conocidos
         for layer in nn.layers:
-            for perceptron in layer.perceptrons:
-                perceptron.weights[:2] = np.array([0.1, -0.2], dtype=np.float32)
-                perceptron.weights[2] = np.float32(0.05)
+            layer.weights[:2, :] = np.array([[0.1, 0.1], [-0.2, -0.2]], dtype=np.float32)
+            layer.weights[2, :] = np.array([0.05, 0.05], dtype=np.float32)
 
         # Guardar pesos
         weight_file = 'test_weights.npz'
@@ -151,9 +153,7 @@ class TestNeuralNetwork(unittest.TestCase):
 
         # Verificar que los pesos se cargaron correctamente
         for layer_original, layer_loaded in zip(nn.layers, nn_loaded.layers):
-            for perceptron_original, perceptron_loaded in zip(layer_original.perceptrons, layer_loaded.perceptrons):
-                np.testing.assert_array_almost_equal(perceptron_original.weights, perceptron_loaded.weights)
-                self.assertAlmostEqual(perceptron_original.get_bias(), perceptron_loaded.get_bias(), places=6)
+            np.testing.assert_array_almost_equal(layer_original.weights, layer_loaded.weights)
 
         # Limpiar archivo de prueba
         os.remove(weight_file)
@@ -232,7 +232,7 @@ class TestNeuralNetwork(unittest.TestCase):
 
     def test_learning_rate_effect(self):
         """Prueba el efecto de diferentes tasas de aprendizaje en el entrenamiento."""
-        topology = [2, 3, 2]  # Cambiado a 2 neuronas en la salida
+        topology = [2, 3, 3, 3, 2]  # Cambiado a 2 neuronas en la salida
         learning_rates = [0.0001, 0.01, 1.0]
         inputs = np.array([[0, 0],
                            [0, 1],

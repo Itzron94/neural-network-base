@@ -24,9 +24,8 @@ class SGDOptimizer(OptimizerFunction):
         `gradients` should be a list of lists: gradients[layer][perceptron]
         """
         for layer_idx, layer in enumerate(network.layers):
-            for p_idx, perceptron in enumerate(layer.perceptrons):
-                grad = gradients[layer_idx][p_idx]
-                perceptron.weights = perceptron.weights - learning_rate * grad
+            grad = np.array(gradients[layer_idx]).transpose()  # Shape: (input_dim + 1, num_perceptrons)
+            network.layers[layer_idx].weights = layer.weights - learning_rate * grad
                    
     def reset_state(self) -> None:
         pass

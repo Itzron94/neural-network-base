@@ -48,7 +48,6 @@ def load_digit_patterns(file_path):
 
 def print_digit(pattern, digit_label, rows=7, cols=5):
     """Print a digit pattern in a readable format."""
-    print(f"\nDigit: {digit_label}")
     for i in range(rows):
         row_str = ""
         for j in range(cols):
@@ -213,9 +212,8 @@ def print_xor_results(network, X, y):
         print(f"{input_str:<15} | {expected_bipolar:^10} | {raw_output:^12.4f} | {predicted_bipolar:^12} | {correct}")
 
     accuracy = np.mean(predicted_classes == y) * 100
-    print("-" * 85)
     print(f"Overall Accuracy: {accuracy:.2f}%")
-    print("="*60 + "\n")
+    print("="*60)
 
 
 def print_parity_results(network, X, y, digit_labels):
@@ -227,21 +225,28 @@ def print_parity_results(network, X, y, digit_labels):
     predictions = network.forward(X, training=False)
     predicted_classes = np.where(predictions > 0.5, 1, 0)
 
-    print(f"\n{'Digit':<8} | {'Expected':<12} | {'Raw Output':<12} | {'Predicted':<12} | {'Correct'}")
-    print("-" * 75)
-
+    # Show each digit pattern with its prediction
     for i, digit in enumerate(digit_labels):
+        print(f"\n{'─' * 40}")
+        print(f"Analyzing Digit: {digit}")
+        print(f"{'─' * 40}")
+        print_digit(X[i], digit)
+
+        # Show prediction
         expected_parity = "ODD" if y[i, 0] == 1 else "EVEN"
         predicted_parity = "ODD" if predicted_classes[i, 0] == 1 else "EVEN"
         raw_output = predictions[i, 0]
         correct = "✓" if predicted_classes[i, 0] == y[i, 0] else "✗"
 
-        print(f"{digit:^8} | {expected_parity:<12} | {raw_output:^12.4f} | {predicted_parity:<12} | {correct:^8}")
+        print(f"\n  Expected:  {expected_parity}")
+        print(f"  Raw Output: {raw_output:.4f}")
+        print(f"  Predicted: {predicted_parity}")
+        print(f"  Result:    {correct} {'CORRECT' if correct == '✓' else 'INCORRECT'}")
 
+    print(f"\n{'─' * 40}")
     accuracy = np.mean(predicted_classes == y) * 100
-    print("-" * 75)
     print(f"Overall Accuracy: {accuracy:.2f}%")
-    print("="*60 + "\n")
+    print("="*60)
 
 
 def plot_training_comparison(xor_history, parity_history, output_dir):
@@ -387,13 +392,8 @@ def run_experiment_from_config(config_path: str):
             raise ValueError("dataset_path is required for parity problem")
         X, y, digit_labels = load_digit_patterns(str(dataset_path))
         extra_data = {'digit_labels': digit_labels}
-
         print(f"\nDataset loaded: {len(X)} digits")
         print(f"Each digit: 7x5 = 35 binary features")
-        print("\n--- Sample Digits ---")
-        for i in [0, 1, 5, 9]:  # Show digits 0, 1, 5, 9
-            if i < len(X):
-                print_digit(X[i], digit_labels[i])
     else:
         raise ValueError(f"Unknown problem type: {problem_type}")
 

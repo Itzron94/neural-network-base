@@ -159,3 +159,4 @@ cython_debug/
 
 .idea/
 .claude
+/experiments/exercise_3/outputs/

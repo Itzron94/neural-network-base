@@ -69,6 +69,13 @@ class MetricsConfig:
 
 
 @dataclass
+class ProblemConfig:
+    """Configuration for problem-specific settings."""
+    type: str = ""
+    dataset_path: Optional[str] = None
+
+
+@dataclass
 class ExperimentConfig:
     """Complete experiment configuration."""
     name: str
@@ -76,6 +83,7 @@ class ExperimentConfig:
     description: str = ""
     training: TrainingConfig = field(default_factory=TrainingConfig)
     metrics: MetricsConfig = field(default_factory=MetricsConfig)
+    problem: ProblemConfig = field(default_factory=ProblemConfig)
     seed: Optional[int] = None
 
 
@@ -121,7 +129,8 @@ class ConfigLoader:
         network_data = config_data.get('network', {})
         training_data = config_data.get('training', {})
         metrics_data = config_data.get('metrics', {})
-        
+        problem_data = config_data.get('problem', {})
+
         # Extract architecture data (with fallback for old format)
         architecture_data = network_data.get('architecture', network_data)
         
@@ -184,12 +193,18 @@ class ConfigLoader:
             plots_path=metrics_data.get('plots_path', 'outputs/plots/')
         )
         
+        problem_config = ProblemConfig(
+            type=problem_data.get('type', 'xor'),
+            dataset_path=problem_data.get('dataset_path')
+        )
+
         return ExperimentConfig(
             name=config_data.get('name', 'unnamed_experiment'),
             description=config_data.get('description', ''),
             network=network_config,
             training=training_config,
             metrics=metrics_config,
+            problem=problem_config,
             seed=config_data.get('seed')
         )
     
@@ -245,6 +260,10 @@ class ConfigLoader:
                 'track_gradients': config.metrics.track_gradients,
                 'save_plots': config.metrics.save_plots,
                 'plots_path': config.metrics.plots_path
+            },
+            'problem': {
+                'type': config.problem.type,
+                'dataset_path': config.problem.dataset_path
             }
         }
         

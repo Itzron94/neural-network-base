@@ -17,10 +17,10 @@ class AdamOptimizer(OptimizerFunction):
     """
     
     def __init__(self, beta1: float = 0.9, beta2: float = 0.999, epsilon: float = 1e-8):
-        self.beta1 = beta1
-        self.beta2 = beta2
-        self.epsilon = epsilon
-        
+        self.beta1 = float(beta1)
+        self.beta2 = float(beta2)
+        self.epsilon = float(epsilon)
+
         # State variables
         self.m = {}  # First moment vector
         self.v = {}  # Second moment vector

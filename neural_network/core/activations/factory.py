@@ -7,6 +7,7 @@ from .step import StepActivation
 from .step_bipolar import StepBipolarActivation
 from .sigmoid import SigmoidActivation
 from .relu import ReLUActivation
+from .linear import LinearActivation
 
 
 class ActivationFunctionType(Enum):
@@ -15,6 +16,7 @@ class ActivationFunctionType(Enum):
     STEP_BIPOLAR = auto()
     SIGMOID = auto()
     RELU = auto()
+    LINEAR = auto()
 
 
 class ActivationFunctionFactory:
@@ -24,6 +26,7 @@ class ActivationFunctionFactory:
         ActivationFunctionType.STEP_BIPOLAR: StepBipolarActivation,
         ActivationFunctionType.SIGMOID: SigmoidActivation,
         ActivationFunctionType.RELU: ReLUActivation,
+        ActivationFunctionType.LINEAR: LinearActivation,
     }
     
     # Mapeo de string a enum
@@ -32,6 +35,7 @@ class ActivationFunctionFactory:
         "STEP_BIPOLAR": ActivationFunctionType.STEP_BIPOLAR,
         "SIGMOID": ActivationFunctionType.SIGMOID,
         "RELU": ActivationFunctionType.RELU,
+        "LINEAR": ActivationFunctionType.LINEAR,
     }
 
     @classmethod

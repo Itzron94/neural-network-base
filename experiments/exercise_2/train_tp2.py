@@ -3,9 +3,14 @@ from pandas import read_csv, DataFrame
 import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
+from pickle import dump
 # Agregar el directorio raíz al path para imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from neural_network.core.perceptron import Perceptron
+from neural_network.core.trainer import k_fold_cross_validate
+from neural_network.core.network import NeuralNetwork
+from neural_network.config import OptimizerConfig
+from neural_network.core.losses.functions import mae
 
 DATASET_PATH = "./resources/datasets/TP3-ej2-conjunto.csv"
 
@@ -46,85 +51,54 @@ def train_perceptron(df: DataFrame, perceptron: Perceptron, learning_rate: float
     
     # Algoritmo de entrenamiento clásico del perceptrón
     print(f"\n--- INICIANDO ENTRENAMIENTO ---")
-    converged = False
     
+    l1_losses = np.zeros(max_epochs)
     for epoch in range(max_epochs):
-        total_errors = 0
-        epoch_updates = 0
-        
+        epoch_updates = 0   
         # Entrenar con cada muestra individualmente
         for i, (inputs, target) in enumerate(zip(X, y)):
             # Preparar entrada como matriz (1 sample)
-            x_input = inputs.reshape(1, -1)
-            
+            x_input = inputs.reshape(1, -1)      
             # Forward pass
-            prediction = perceptron.calculate_output(x_input)[0]
-            
+            prediction = perceptron.calculate_output(x_input)[0]          
             # Calcular error
-            error = target - prediction
-            
-            if error != 0:
-                total_errors += abs(error)
-                epoch_updates += 1
-                
-                # Actualización manual de pesos (algoritmo clásico de perceptrón)
-                # w = w + lr * error * x
-                perceptron.weights[:-1] += learning_rate * error * inputs
-                # b = b + lr * error
-                perceptron.weights[-1] += learning_rate * error
-                
-                # print(f"  Época {epoch+1:2d}, Muestra {i+1}: Error={error:2}, "
-                #       f"Pesos=[{perceptron.weights[0]:6.3f}, {perceptron.weights[1]:6.3f}, {perceptron.weights[2]:6.3f}], "
-                #       f"Bias={perceptron.weights[-1]:6.3f}")
-        
-        # Calcular accuracy de la época
+            error = target - prediction  
+            # Actualización manual de pesos (algoritmo clásico de perceptrón)
+            # w = w + lr * error * x
+            perceptron.weights[:-1] += learning_rate * error * inputs
+            # b = b + lr * error
+            perceptron.weights[-1] += learning_rate * error
+            # print(f"  Época {epoch+1:2d}, Muestra {i+1}: Error={error:2}, "
+            #       f"Pesos=[{perceptron.weights[0]:6.3f}, {perceptron.weights[1]:6.3f}, {perceptron.weights[2]:6.3f}], "
+            #       f"Bias={perceptron.weights[-1]:6.3f}")
+            epoch_updates += 1  
         predictions = []
         for inputs in X:
             x_input = inputs.reshape(1, -1)
             pred = perceptron.calculate_output(x_input)[0]
             predictions.append(pred)
         
-        l1_error = np.mean(np.abs(np.array(predictions) - y))
-        print(f"Época {epoch+1:2d}: Errores={total_errors}, L1 error={l1_error:.3f}, Updates={epoch_updates}")
+        l1_losses[epoch] = np.mean(np.abs(np.array(predictions) - y))
+        print(f"Época {epoch+1:2d}: Mean L1 error={l1_losses[epoch]:.3f}, Updates={epoch_updates}")
         
-        # Verificar convergencia
-        if l1_error < 1.0:
-            converged = True
-            print(f"\n¡Convergencia alcanzada en época {epoch + 1}!")
-            break
-    
-    if not converged:
-        print(f"\nNo convergió en {max_epochs} épocas")
-    
-    # Evaluación final
-    print(f"\n--- EVALUACIÓN FINAL ---")
-    print("Entrada   | Esperado | Predicho")
-    print("-" * 40)
-    
-    final_predictions = []
-    for i, (inputs, target) in enumerate(zip(X, y)):
-        x_input = inputs.reshape(1, -1)
-        pred = perceptron.calculate_output(x_input)[0]
-        final_predictions.append(pred)
-        print(f"[{inputs[0]}, {inputs[1]}, {inputs[2]}] |    {target}    |    {pred}")
-    
-    final_l1 = np.mean(np.abs(np.array(final_predictions)-y))
-    print(f"\nL1: {final_l1:.3f} ({final_l1*100:.1f}%)")
     print(f"Pesos finales: [{perceptron.weights[0]:.4f}, {perceptron.weights[1]:.4f}, {perceptron.weights[2]:.4f}]")
     print(f"Bias final: {perceptron.weights[-1]:.4f}")
     
-    return final_l1, converged, perceptron
+    return l1_losses, perceptron
 
 
 if __name__ == "__main__":
     print("TP3 - EJERCICIO 2: PERCEPTRÓN SIMPLE")
     print("-" * 50)
-    
+    max_epochs = 200
+    lr = 1e-3
     #Load dataset
     df = read_csv(DATASET_PATH)
     print(f"Dataset cargado desde '{DATASET_PATH}'")
     print(f"Primeras filas del dataset:\n{df.head()}")
     print(df.info())
+    print(f'Max y value = {df.y.max()}')
+    print(f'Min y value = {df.y.min()}')
     #Visualize dataset in 3d surface
     # fig = plt.figure(figsize=(10, 8))
     # ax = fig.add_subplot(111, projection='3d')
@@ -143,6 +117,40 @@ if __name__ == "__main__":
     # plt.show()
     # Entrenar y evaluar funcionamiento con perceptron lineal
     l_mdl = Perceptron(num_inputs=3, activation_type="LINEAR")
-    l1, cvrgd, trained_mdl = train_perceptron(df, l_mdl, learning_rate=0.001, max_epochs=100, seed=42)
-    print(f'Final L1 loss (LINEAR): {l1:.3f}, Convergió: {cvrgd}')
-    # train_tp2()
+    l1_linear, trained_mdl = train_perceptron(df, l_mdl, learning_rate=lr, max_epochs=max_epochs, seed=42)
+    print(f'Final L1 loss (LINEAR): {l1_linear[-1]:.3f}')
+    # Entrenar y evaluar funcionamiento con perceptron no-lineal
+    non_l_mdl = Perceptron(num_inputs=3, activation_type="RELU")
+    l1_nonlinear, trained_mdl = train_perceptron(df, non_l_mdl, learning_rate=lr, max_epochs=max_epochs, seed=42)
+    print(f'Final L1 loss (RELU): {l1_nonlinear[-1]:.3f}')
+    #Mean L1 error comparison
+    plt.figure(figsize=(10,8))
+    plt.rcParams['axes.labelsize'] = 16    # x and y labels
+    plt.rcParams['xtick.labelsize'] = 14   # x-axis ticks
+    plt.rcParams['ytick.labelsize'] = 14   # y-axis ticks
+    plt.rcParams['axes.titlesize'] = 20    # title
+    plt.title("MAE vs epochs")
+    plt.plot(range(1, max_epochs+1),l1_linear, label='Linear activation', lw=4)
+    plt.plot(range(1, max_epochs+1),l1_nonlinear, label='Relu activation', lw=4)
+    plt.ylabel('Mean(|y-ŷ|)')
+    plt.xlabel('Epoch')
+    plt.grid(True)
+    plt.legend(fontsize=16)
+    plt.savefig("./outputs/ex2.png")
+    plt.show()
+
+
+    #Analisis del poder de generalizacion del peceptron con función de activación Relu
+    y = df['y'].values
+    X = df.drop(columns=['y']).values
+    topology = [3,1]
+    mdl = NeuralNetwork(topology, activation_type='RELU', )
+    b_size = 1
+    opt_cfg = OptimizerConfig(type = 'SGD')
+    loss = mae
+    k = 5
+    scoring = 'mae'
+
+    results = k_fold_cross_validate(X, y, mdl, opt_cfg, loss, lr, b_size, max_epochs, k, scoring)
+    with open('./outputs/ex2_dict.pkl', 'wb') as file:
+        dump(results, file)

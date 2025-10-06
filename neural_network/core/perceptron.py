@@ -4,7 +4,7 @@ import numpy as np
 from typing import Optional
 from .activations import ActivationFunction, ActivationFunctionFactory
 from ..config import WeightInitConfig
-
+import os
 
 class Perceptron:
     def __init__(self, num_inputs: int, activation_type: str,
@@ -44,6 +44,19 @@ class Perceptron:
     def get_bias(self) -> float:
         """Get the bias term (last weight)."""
         return self.weights[-1]
+
+    def save_weights(self, file_path: str) -> None:
+        data = {}
+        data['weights'] = self.weights
+        np.savez(file_path, **data)
+        print(f"Pesos guardados en '{file_path}'.")
+
+    def load_weights(self, file_path: str) -> None:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"El archivo '{file_path}' no existe.")
+        data = np.load(file_path, allow_pickle=True)
+        self.weights = data['weights']
+        print(f"Pesos cargados desde '{file_path}'.")
 
     def _initialize_weights(self, num_inputs: int, weight_config: WeightInitConfig) -> np.ndarray:
         """Initialize weights based on configuration."""

@@ -14,4 +14,8 @@ def softmax_cross_entropy_with_logits(logits: np.ndarray, labels: np.ndarray) ->
     epsilon = 1e-8
     softmax_probs = np.clip(softmax_probs, epsilon, 1. - epsilon)
     loss = -np.sum(labels * np.log(softmax_probs)) / logits.shape[0]
-    return loss, softmax_probs
+    return loss
+
+def mae(x1, x2) -> (float, None):
+    "Mean absoulte err"
+    return np.mean(np.abs(x1-x2))

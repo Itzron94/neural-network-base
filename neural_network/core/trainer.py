@@ -4,6 +4,120 @@ from .network import NeuralNetwork
 from .optimizers import OptimizerFunction, OptimizerFunctionFactory
 from ..config import OptimizerConfig
 
+
+def k_fold_cross_validate(
+    X: np.ndarray, 
+    y: np.ndarray, 
+    model: Any,
+    lr: float = 1e-3,
+    opt_cfg: OptimizerConfig,
+    k: int = 5,
+    scoring: str = 'accuracy',
+    shuffle: bool = True,
+    random_state: int = None,
+    return_models: bool = False,
+    stratified: bool = False
+) -> Dict[str, Union[float, List]]:
+    """
+    Perform k-fold cross-validation on a given dataset.
+    
+    Parameters:
+    -----------
+    X : np.ndarray
+        Feature matrix
+    y : np.ndarray
+        Target vector
+    model : object
+        Model object with fit() and predict() methods
+    k : int
+        Number of folds
+    scoring : str
+        Scoring metric
+    shuffle : bool
+        Whether to shuffle the data
+    random_state : int
+        Random seed for reproducibility
+    return_models : bool
+        Whether to return trained models for each fold
+    stratified : bool
+        Whether to use stratified k-fold (for classification)
+    
+    Returns:
+    --------
+    results : Dict
+        Dictionary containing cross-validation results
+    """
+    
+    # Input validation
+    if len(X) != len(y):
+        raise ValueError("X and y must have the same number of samples")
+    
+    if k <= 1 or k > len(X):
+        raise ValueError("k must be between 2 and number of samples")
+    
+    n_samples = len(X)
+    
+    # Generate folds
+    if stratified:
+        folds = stratified_k_fold_split(y, k, shuffle, random_state)
+    else:
+        folds = k_fold_split(n_samples, k, shuffle, random_state)
+    
+    # Initialize lists to store results
+    scores = []
+    models = [] if return_models else None
+    fold_details = []
+    
+    for fold, (train_idx, test_idx) in enumerate(folds):
+        tr = Trainer(learning_rate=learning_rate, epochs=epochs,
+                    loss_func=softmax_cross_entropy_with_logits, network=nn)
+        # Split data
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+        
+        fold_model = model  # Use same model if cloning fails
+        
+        # Train model
+        fold_model.fit(X_train, y_train)
+        
+        # Make predictions
+        y_pred = fold_model.predict(X_test)
+        
+        # Calculate score
+        score = calculate_score(y_test, y_pred, scoring)
+        scores.append(score)
+        
+        # Store model if requested
+        if return_models:
+            models.append(fold_model)
+        
+        # Store fold details
+        fold_details.append({
+            'fold': fold + 1,
+            'train_size': len(train_idx),
+            'test_size': len(test_idx),
+            'score': score,
+            'train_indices': train_idx,
+            'test_indices': test_idx
+        })
+    
+    # Calculate statistics
+    results = {
+        'fold_scores': scores,
+        'mean_score': np.mean(scores),
+        'std_score': np.std(scores),
+        'min_score': np.min(scores),
+        'max_score': np.max(scores),
+        'fold_details': fold_details,
+        'n_folds': k,
+        'scoring': scoring
+    }
+    
+    if return_models:
+        results['models'] = models
+    
+    return results
+
 class Trainer:
     def __init__(self, learning_rate, epochs, network: NeuralNetwork, loss_func,
                 optimizer_config: Optional[OptimizerConfig] = None,):

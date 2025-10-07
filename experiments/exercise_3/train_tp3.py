@@ -1,9 +1,10 @@
 """
-TP3 - Exercise 3: Multilayer Perceptron (MLP) for XOR and Parity Discrimination
+TP3 - Exercise 3: Multilayer Perceptron (MLP) for XOR, Parity Discrimination, and Digit Recognition
 
-Two problems in one script:
+Three problems in one script:
 1. XOR: Classic non-linearly separable logical function
 2. Parity Discrimination: Classify digits (0-9) as odd or even using 7x5 binary patterns
+3. Digit Discrimination: Recognize which digit (0-9) corresponds to the network's input
 """
 
 import os
@@ -44,6 +45,58 @@ def load_digit_patterns(file_path):
     X = np.array([list(map(int, " ".join(lines[i:i+7]).split())) for i in range(0, len(lines), 7)], dtype=np.float32)
     y = np.array([[i % 2] for i in range(len(X))], dtype=np.float32)
     return X, y, list(range(len(X)))
+
+
+def load_digit_patterns_for_classification(file_path):
+    """
+    Load 7x5 digit patterns from file for digit classification (0-9).
+    Each digit is represented as 7 rows x 5 columns = 35 binary features.
+
+    Returns:
+        X: Array of shape (10, 35) - 10 digits, each with 35 features
+        y: Array of shape (10, 10) - One-hot encoded labels for digits 0-9
+        digit_labels: List of digit values [0, 1, 2, ..., 9]
+    """
+    with open(file_path, 'r') as f:
+        lines = [line.strip() for line in f if line.strip()]
+
+    X = np.array([list(map(int, " ".join(lines[i:i+7]).split())) for i in range(0, len(lines), 7)], dtype=np.float32)
+
+    # One-hot encode the labels for 10 classes
+    num_digits = len(X)
+    y = np.zeros((num_digits, 10), dtype=np.float32)
+    for i in range(num_digits):
+        y[i, i] = 1.0  # One-hot encoding
+
+    digit_labels = list(range(num_digits))
+    return X, y, digit_labels
+
+
+def add_noise_to_patterns(X, noise_level=0.1, seed=None):
+    """
+    Add noise to digit patterns by randomly flipping pixels.
+
+    Args:
+        X: Input patterns (N, 35)
+        noise_level: Probability of flipping each pixel (0.0 to 1.0)
+        seed: Random seed for reproducibility
+
+    Returns:
+        Noisy patterns
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    X_noisy = X.copy()
+    num_samples, num_features = X.shape
+
+    # Generate random mask for noise
+    noise_mask = np.random.rand(num_samples, num_features) < noise_level
+
+    # Flip bits where noise_mask is True
+    X_noisy[noise_mask] = 1 - X_noisy[noise_mask]
+
+    return X_noisy
 
 
 def print_digit(pattern, digit_label, rows=7, cols=5):
@@ -103,6 +156,10 @@ def train_mlp(problem_type: str, X, y, topology, learning_rate=0.5, epochs=10000
     print("STARTING TRAINING")
 
     num_samples = X.shape[0]
+
+    # Determine if this is multi-class classification
+    is_multiclass = y.shape[1] > 1 if len(y.shape) > 1 else False
+
     for epoch in range(1, epochs + 1):
         total_loss = 0.0
 
@@ -159,8 +216,16 @@ def train_mlp(problem_type: str, X, y, topology, learning_rate=0.5, epochs=10000
 
         # Calculate accuracy
         predictions = network.forward(X, training=False)
-        predicted_classes = np.where(predictions > 0.5, 1, 0)
-        accuracy = np.mean(predicted_classes == y) * 100
+
+        if is_multiclass:
+            # Multi-class classification
+            predicted_classes = np.argmax(predictions, axis=1)
+            true_classes = np.argmax(y, axis=1)
+            accuracy = np.mean(predicted_classes == true_classes) * 100
+        else:
+            # Binary classification
+            predicted_classes = np.where(predictions > 0.5, 1, 0)
+            accuracy = np.mean(predicted_classes == y) * 100
 
         loss_history.append(total_loss)
         accuracy_history.append(accuracy)
@@ -178,8 +243,14 @@ def train_mlp(problem_type: str, X, y, topology, learning_rate=0.5, epochs=10000
 
     # Final evaluation
     predictions = network.forward(X, training=False)
-    predicted_classes = np.where(predictions > 0.5, 1, 0)
-    final_accuracy = np.mean(predicted_classes == y) * 100
+
+    if is_multiclass:
+        predicted_classes = np.argmax(predictions, axis=1)
+        true_classes = np.argmax(y, axis=1)
+        final_accuracy = np.mean(predicted_classes == true_classes) * 100
+    else:
+        predicted_classes = np.where(predictions > 0.5, 1, 0)
+        final_accuracy = np.mean(predicted_classes == y) * 100
 
     if verbose:
         print(f"\nFinal Accuracy: {final_accuracy:.2f}%")
@@ -199,7 +270,7 @@ def print_xor_results(network, X, y):
     # Convert to bipolar for display
     bipolar_map = {0: -1, 1: 1}
 
-    print(f"\n{'Input':<15} | {'Expected':<10} | {'Raw Output':<12} | {'Predicted':<12} | {'Correct'}")
+    print(f"\n{'Input':<15}  {'Expected':<10}  {'Raw Output':<12}  {'Predicted':<12}  {'Correct'}")
     print("-" * 85)
 
     for i in range(len(X)):
@@ -209,7 +280,7 @@ def print_xor_results(network, X, y):
         predicted_bipolar = bipolar_map[int(predicted_classes[i, 0])]
         correct = "✓" if predicted_classes[i, 0] == y[i, 0] else "✗"
 
-        print(f"{input_str:<15} | {expected_bipolar:^10} | {raw_output:^12.4f} | {predicted_bipolar:^12} | {correct}")
+        print(f"{input_str:<15}  {expected_bipolar:^10}  {raw_output:^12.4f}  {predicted_bipolar:^12}  {correct}")
 
     accuracy = np.mean(predicted_classes == y) * 100
     print(f"Overall Accuracy: {accuracy:.2f}%")
@@ -247,6 +318,81 @@ def print_parity_results(network, X, y, digit_labels):
     accuracy = np.mean(predicted_classes == y) * 100
     print(f"Overall Accuracy: {accuracy:.2f}%")
     print("="*60)
+
+
+def print_digit_classification_results(network, X, y, digit_labels, X_noisy=None, noise_level=0.0):
+    """Print digit classification results in a readable format."""
+    print("\n" + "="*60)
+    print("DIGIT CLASSIFICATION PREDICTIONS")
+    print("="*60)
+
+    # Test on clean data
+    predictions = network.forward(X, training=False)
+    predicted_classes = np.argmax(predictions, axis=1)
+    true_classes = np.argmax(y, axis=1)
+
+    print("\n" + "-"*60)
+    print("CLEAN DATA RESULTS")
+    print("-"*60)
+
+    # Show each digit pattern with its prediction
+    for i, digit in enumerate(digit_labels):
+        print(f"\n{'─' * 40}")
+        print(f"Digit: {digit}")
+        print(f"{'─' * 40}")
+        print_digit(X[i], digit)
+
+        # Show prediction
+        predicted_digit = predicted_classes[i]
+        confidence = predictions[i, predicted_digit] * 100
+        correct = "✓" if predicted_digit == true_classes[i] else "✗"
+
+        print(f"\n  Expected:   {true_classes[i]}")
+        print(f"  Predicted:  {predicted_digit}")
+        print(f"  Confidence: {confidence:.2f}%")
+        print(f"  Result:     {correct} {'CORRECT' if correct == '✓' else 'INCORRECT'}")
+
+        # Show top-3 predictions
+        top3_indices = np.argsort(predictions[i])[::-1][:3]
+        print(f"\n  Top 3 Predictions:")
+        for rank, idx in enumerate(top3_indices, 1):
+            print(f"    {rank}. Digit {idx}: {predictions[i, idx]*100:.2f}%")
+
+    accuracy = np.mean(predicted_classes == true_classes) * 100
+    print(f"\n{'─' * 40}")
+    print(f"Overall Accuracy (Clean): {accuracy:.2f}%")
+    print("="*60)
+
+    # Test on noisy data if provided
+    if X_noisy is not None:
+        print("\n" + "-"*60)
+        print(f"NOISY DATA RESULTS (Noise Level: {noise_level*100:.1f}%)")
+        print("-"*60)
+
+        predictions_noisy = network.forward(X_noisy, training=False)
+        predicted_classes_noisy = np.argmax(predictions_noisy, axis=1)
+
+        for i, digit in enumerate(digit_labels):
+            print(f"\n{'─' * 40}")
+            print(f"Digit: {digit} (with noise)")
+            print(f"{'─' * 40}")
+            print_digit(X_noisy[i], digit)
+
+            # Show prediction
+            predicted_digit = predicted_classes_noisy[i]
+            confidence = predictions_noisy[i, predicted_digit] * 100
+            correct = "✓" if predicted_digit == true_classes[i] else "✗"
+
+            print(f"\n  Expected:   {true_classes[i]}")
+            print(f"  Predicted:  {predicted_digit}")
+            print(f"  Confidence: {confidence:.2f}%")
+            print(f"  Result:     {correct} {'CORRECT' if correct == '✓' else 'INCORRECT'}")
+
+        accuracy_noisy = np.mean(predicted_classes_noisy == true_classes) * 100
+        print(f"\n{'─' * 40}")
+        print(f"Overall Accuracy (Noisy): {accuracy_noisy:.2f}%")
+        print(f"Accuracy Drop: {accuracy - accuracy_noisy:.2f}%")
+        print("="*60)
 
 
 def plot_training_comparison(xor_history, parity_history, output_dir):
@@ -365,6 +511,53 @@ def plot_training_history(loss_history, accuracy_history, output_dir, problem_na
     plt.close()
 
 
+def plot_confusion_matrix(network, X, y, digit_labels, output_dir, filename='confusion_matrix.png'):
+    """Plot confusion matrix for digit classification."""
+    os.makedirs(output_dir, exist_ok=True)
+
+    predictions = network.forward(X, training=False)
+    predicted_classes = np.argmax(predictions, axis=1)
+    true_classes = np.argmax(y, axis=1)
+
+    # Create confusion matrix
+    num_classes = len(digit_labels)
+    confusion = np.zeros((num_classes, num_classes), dtype=int)
+
+    for true_label, pred_label in zip(true_classes, predicted_classes):
+        confusion[true_label, pred_label] += 1
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 8))
+    im = ax.imshow(confusion, cmap='Blues', aspect='auto')
+
+    # Add colorbar
+    plt.colorbar(im, ax=ax)
+
+    # Set ticks
+    ax.set_xticks(np.arange(num_classes))
+    ax.set_yticks(np.arange(num_classes))
+    ax.set_xticklabels(digit_labels)
+    ax.set_yticklabels(digit_labels)
+
+    # Add labels
+    ax.set_xlabel('Predicted Digit', fontsize=12)
+    ax.set_ylabel('True Digit', fontsize=12)
+    ax.set_title('Digit Classification - Confusion Matrix', fontsize=14, fontweight='bold')
+
+    # Add text annotations
+    for i in range(num_classes):
+        for j in range(num_classes):
+            text = ax.text(j, i, confusion[i, j],
+                          ha="center", va="center", color="black" if confusion[i, j] < confusion.max()/2 else "white",
+                          fontsize=12, fontweight='bold')
+
+    plt.tight_layout()
+    plot_path = os.path.join(output_dir, filename)
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    print(f"Confusion matrix saved to: {plot_path}")
+    plt.close()
+
+
 def run_experiment_from_config(config_path: str):
     config = ConfigLoader.load_config(config_path)
 
@@ -394,6 +587,28 @@ def run_experiment_from_config(config_path: str):
         extra_data = {'digit_labels': digit_labels}
         print(f"\nDataset loaded: {len(X)} digits")
         print(f"Each digit: 7x5 = 35 binary features")
+    elif problem_type == "digit_classification":
+        print("\nProblem Type: Digit Classification (0-9)")
+        if not dataset_path:
+            raise ValueError("dataset_path is required for digit classification problem")
+        X, y, digit_labels = load_digit_patterns_for_classification(str(dataset_path))
+
+        # Get noise level from config if available
+        noise_level = getattr(config.problem, 'noise_level', 0.0)
+        X_noisy = None
+        if noise_level > 0:
+            X_noisy = add_noise_to_patterns(X, noise_level=noise_level, seed=config.seed)
+
+        extra_data = {
+            'digit_labels': digit_labels,
+            'X_noisy': X_noisy,
+            'noise_level': noise_level
+        }
+        print(f"\nDataset loaded: {len(X)} digits (0-9)")
+        print(f"Each digit: 7x5 = 35 binary features")
+        print(f"Output neurons: 10 (one-hot encoded)")
+        if noise_level > 0:
+            print(f"Noise level for testing: {noise_level*100:.1f}%")
     else:
         raise ValueError(f"Unknown problem type: {problem_type}")
 
@@ -419,6 +634,12 @@ def run_experiment_from_config(config_path: str):
         print_xor_results(network, X, y)
     elif problem_type == "parity":
         print_parity_results(network, X, y, extra_data['digit_labels'])
+    elif problem_type == "digit_classification":
+        print_digit_classification_results(
+            network, X, y, extra_data['digit_labels'],
+            X_noisy=extra_data.get('X_noisy'),
+            noise_level=extra_data.get('noise_level', 0.0)
+        )
 
     if config.metrics.save_plots:
         plots_dir = Path(config.metrics.plots_path)
@@ -429,6 +650,12 @@ def run_experiment_from_config(config_path: str):
             safe_name = config.name.lower().replace(' ', '_')
             plot_decision_boundary(network, X, y, str(plots_dir), filename=f'{safe_name}_decision_boundary.png')
 
+        # Confusion matrix for digit classification
+        if problem_type == "digit_classification":
+            safe_name = config.name.lower().replace(' ', '_')
+            plot_confusion_matrix(network, X, y, extra_data['digit_labels'], str(plots_dir),
+                                filename=f'{safe_name}_confusion_matrix.png')
+
     # Save weights
     if config.training.save_weights:
         weights_dir = Path(config.training.weights_path)
@@ -438,14 +665,14 @@ def run_experiment_from_config(config_path: str):
         network.save_weights(str(weights_file))
 
     print("\n" + "="*60)
-    print(" EXPERIMENT SUMMARY:")
+    print("EXPERIMENT SUMMARY:")
     print(f"\n Problem: {problem_type.upper()}")
     print(f" Topology: {config.network.architecture.topology}")
     print(f" Final Accuracy: {final_accuracy:.2f}%")
     print(f" Epochs trained: {len(loss_history)}")
     print(f" Status: {'SOLVED ✓' if final_accuracy >= 90.0 else 'NEEDS IMPROVEMENT'}")
 
-    print("\n EXPERIMENT COMPLETE!")
+    print("\nEXPERIMENT COMPLETE!")
     print("="*60 + "\n")
 
     return network, loss_history, accuracy_history, final_accuracy
@@ -454,12 +681,13 @@ def run_experiment_from_config(config_path: str):
 def main():
     """Main entry point with command-line argument parsing."""
     parser = argparse.ArgumentParser(
-        description="TP3 - Exercise 3: MLP for XOR and Parity Discrimination",
+        description="TP3 - Exercise 3: MLP for XOR, Parity Discrimination, and Digit Recognition",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python train_tp3.py xor_config.yaml
   python train_tp3.py parity_config.yaml
+  python train_tp3.py digit_classification_config.yaml
   python train_tp3.py experiments/exercise_3/xor_config.yaml
         """
     )
@@ -492,17 +720,18 @@ Examples:
                 print(f"  - {cfg.name}")
             sys.exit(1)
 
-        print(f"\n Loading config: {config_path}")
+        print(f"\nLoading config: {config_path}")
         run_experiment_from_config(str(config_path))
 
     else:
         # Legacy mode: Run both problems sequentially
         print("\n" + "="*60)
-        print("RUNNING BOTH EXPERIMENTS (LEGACY MODE)")
+        print("RUNNING ALL EXPERIMENTS (LEGACY MODE)")
         print("="*60)
         print("\nTip: Run individual experiments with:")
         print("  python train_tp3.py xor_config.yaml")
         print("  python train_tp3.py parity_config.yaml")
+        print("  python train_tp3.py digit_classification_config.yaml")
 
         exercise_dir = Path(__file__).parent
 
@@ -519,6 +748,13 @@ Examples:
             run_experiment_from_config(str(parity_config))
         else:
             print("\n⚠️  Warning: parity_config.yaml not found, skipping Parity experiment")
+
+        # Run Digit Classification
+        digit_config = exercise_dir / "digit_classification_config.yaml"
+        if digit_config.exists():
+            run_experiment_from_config(str(digit_config))
+        else:
+            print("\n⚠️  Warning: digit_classification_config.yaml not found, skipping Digit Classification experiment")
 
 
 if __name__ == "__main__":

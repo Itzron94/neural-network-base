@@ -99,22 +99,6 @@ if __name__ == "__main__":
     print(df.info())
     print(f'Max y value = {df.y.max()}')
     print(f'Min y value = {df.y.min()}')
-    #Visualize dataset in 3d surface
-    # fig = plt.figure(figsize=(10, 8))
-    # ax = fig.add_subplot(111, projection='3d')
-
-    # scatter = ax.scatter(df['x1'], df['x2'], df['x3'], 
-    #                     c=df['y'], cmap='viridis', 
-    #                     s=50, alpha=0.8)
-
-    # plt.colorbar(scatter, ax=ax, shrink=0.5, aspect=20, label='y values')
-
-    # ax.set_xlabel('X1')
-    # ax.set_ylabel('X2')
-    # ax.set_zlabel('X3')
-    # ax.set_title('3D Scatter Plot')
-
-    # plt.show()
     # Entrenar y evaluar funcionamiento con perceptron lineal
     l_mdl = Perceptron(num_inputs=3, activation_type="LINEAR")
     l1_linear, trained_mdl = train_perceptron(df, l_mdl, learning_rate=lr, max_epochs=max_epochs, seed=42)
@@ -154,3 +138,74 @@ if __name__ == "__main__":
     results = k_fold_cross_validate(X, y, mdl, opt_cfg, loss, lr, b_size, max_epochs, k, scoring)
     with open('./outputs/ex2_dict.pkl', 'wb') as file:
         dump(results, file)
+    print(results.keys())
+    fold_details = results['fold_details']
+    print(f'Mean {scoring} over {results["n_folds"]} folds: {results["mean_score"]:.4f} ± {results["std_score"]:.4f}')
+    plt.figure(figsize=(10,8))
+    plt.rcParams['axes.labelsize'] = 16    # x and y labels
+    plt.rcParams['xtick.labelsize'] = 14   # x-axis ticks
+    plt.rcParams['ytick.labelsize'] = 14   # y-axis ticks
+    plt.rcParams['axes.titlesize'] = 20    # title
+    plt.title(f'{scoring.upper()} per fold')
+    plt.bar(range(1, results['n_folds']+1), results['fold_scores'], color='lightgreen')
+    plt.ylabel(scoring.upper())
+    plt.xlabel('Fold')
+    plt.xticks(range(1, results['n_folds']+1))
+    plt.grid(True)
+    plt.savefig("./outputs/ex2_barplot.png")
+    plt.show()
+
+    #Check linearity of data
+    # Simple linearity test using correlations
+    def simple_linearity_test(coords, outputs):
+        # Calculate correlation coefficients between each coordinate and output
+        correlations = np.array([np.corrcoef(coords[:, i], outputs)[0, 1] 
+                            for i in range(coords.shape[1])])
+        
+        # Calculate overall correlation (you could also use multiple R)
+        X_with_ones = np.column_stack([np.ones(len(coords)), coords])
+        beta = np.linalg.lstsq(X_with_ones, outputs, rcond=None)[0]
+        predictions = X_with_ones @ beta
+        r_squared = np.corrcoef(outputs, predictions)[0, 1] ** 2
+        
+        return correlations, r_squared
+
+    correlations, r_squared = simple_linearity_test(X, y)
+    print(f"Correlations with output: {correlations}")
+    print(f"R-squared: {r_squared:.4f}")
+
+    # #3D scatter plot of the dataset
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = fig.add_subplot(111, projection='3d')
+
+    # scatter = ax.scatter(df['x1'], df['x2'], df['x3'], 
+    #                     c=df['y'], cmap='gist_heat', 
+    #                     s=50, alpha=0.8)
+
+    # plt.colorbar(scatter, ax=ax, shrink=0.5, aspect=20, label='y values')
+
+    # ax.set_xlabel('X1')
+    # ax.set_ylabel('X2')
+    # ax.set_zlabel('X3')
+    # ax.set_title('3D Scatter Plot')
+    # plt.show()
+
+    # # #Plot fold 4
+    # fold4_details = fold_details[3]
+    # train_indices = fold4_details['train_indices']
+    # test_indices = fold4_details['test_indices']
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = fig.add_subplot(111, projection='3d')
+
+    # scatter = ax.scatter(X[train_indices,0], X[train_indices,1], X[train_indices,2], 
+    #                     c='red', label='Training', 
+    #                     s=50, alpha=0.8)
+    # scatter = ax.scatter(X[test_indices,0], X[test_indices,1], X[test_indices,2], 
+    #                     c='blue', label='Training', 
+    #                     s=50, alpha=0.8)
+
+    # ax.set_xlabel('X1')
+    # ax.set_ylabel('X2')
+    # ax.set_zlabel('X3')
+    # ax.set_title('3D Scatter Plot')
+    # plt.show()

@@ -1,9 +1,16 @@
 # main.py
 
 import numpy as np
-from neural_network.core.network import NeuralNetwork
-from neural_network.activations.functions import ActivationFunctionType
 import os
+import sys
+from pathlib import Path
+# Agregar el directorio raíz al path para imports
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from neural_network.core.network import NeuralNetwork
+from neural_network.config import OptimizerConfig
+from neural_network.core.losses.functions import softmax_cross_entropy_with_logits
+from neural_network.core.trainer import Trainer
+
 
 
 def load_mnist():
@@ -39,24 +46,25 @@ def main():
 
     # Paso 2: Crear e inicializar la red neuronal
     topology = [784, 128, 64, 10]
-    activation_type = ActivationFunctionType.RELU
+    activation_type = "RELU"
     learning_rate = 0.001
     epochs = 50
-    batch_size = 64
+    batch_size = 32
     dropout_rate = 0.0
 
     print("Inicializando la red neuronal...")
     nn = NeuralNetwork(
         topology=topology,
         activation_type=activation_type,
-        learning_rate=learning_rate,
-        epochs=epochs,
         dropout_rate=dropout_rate
     )
 
+    tr = Trainer( learning_rate, epochs, nn,
+        softmax_cross_entropy_with_logits, optimizer_config=OptimizerConfig("SGD") )
+
     # Paso 3: Entrenar la red
     print("Entrenando la red neuronal...")
-    nn.train(X_train, y_train, batch_size=batch_size)
+    tr.train(X_train, y_train, batch_size)
 
     # Paso 4: Evaluar la red en el conjunto de prueba
     print("Evaluando la red en el conjunto de prueba...")

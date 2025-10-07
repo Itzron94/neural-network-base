@@ -3,7 +3,6 @@ from typing import List, Optional, Union, Any, Dict
 from .network import NeuralNetwork
 from .optimizers import OptimizerFunction, OptimizerFunctionFactory
 from ..config import OptimizerConfig
-from .losses import softmax_cross_entropy_with_logits
 from ..utils.data_utils import calculate_score, k_fold_split, stratified_k_fold_split
 
 class Trainer:
@@ -40,39 +39,62 @@ class Trainer:
                     print("Advertencia: y contiene valores NaN o Inf en la época", epoch)
                     continue
 
-                batch_loss = self.loss_f(y, batch_labels)
+                batch_loss, loss_grad = self.loss_f(y, batch_labels)
                 total_loss += batch_loss
 
-                deltas: List[np.ndarray] = []
-                deltas.insert(0, batch_loss)
+                # FIX 1: Ensure batch_loss has correct shape for backpropagation
+                delta_output = loss_grad
+                
+                deltas = [delta_output]  # Start with output layer delta
 
+                # Backpropagation through layers
                 for l in range(len(self.network.layers) - 2, -1, -1):
                     current_layer = self.network.layers[l]
                     next_layer = self.network.layers[l + 1]
-                    weights_next_layer = next_layer.weights[:-1, :] #Excluir el bias
-                    #weights_next_layer = np.array([p.weights[:-1] for p in next_layer.perceptrons]) #Excluir el bias
-                    delta_next = deltas[0]
-                    delta = np.dot(delta_next, weights_next_layer.transpose()) * current_layer.get_activation_derivative()
-                    deltas.insert(0, delta)
+                    
+                    # FIX 2: Handle weights extraction properly
+                    # Assuming each layer has .weights attribute of shape (input_dim+1, num_neurons)
+                    # where last row is bias weights
+                    weights_next_layer = next_layer.weights[:-1, :]  # Exclude bias, shape: (next_layer_input_dim, num_neurons_next)
+                    
+                    delta_next = deltas[0]  # Current delta from next layer
+                    
+                    # FIX 3: Proper matrix multiplication for backpropagation
+                    # delta_next shape: (batch_size, num_neurons_next)
+                    # weights_next_layer shape: (next_layer_input_dim, num_neurons_next)
+                    # We want: delta_next dot weights_next_layer.T
+                    if delta_next.ndim == 1:
+                        delta_next = delta_next.reshape(1, -1)  # Ensure 2D
+                    
+                    # Correct backpropagation: δ_l = (δ_{l+1} · W_{l+1}^T) ⊙ f'(z_l)
+                    delta_current = np.dot(delta_next, weights_next_layer.T) * current_layer.get_activation_derivative()
+                    
+                    deltas.insert(0, delta_current)
 
+                # FIX 4: Calculate gradients with proper dimension handling
                 all_gradients = []
                 for l, layer in enumerate(self.network.layers):
-                    inputs_to_use = batch_inputs if l == 0 else self.network.layers[l - 1].outputs
-                    delta = deltas[l]
-                    if delta.ndim > 0:
-                        den = len(delta)
+                    # Get inputs to this layer
+                    if l == 0:
+                        inputs_to_use = batch_inputs  # Shape: (batch_size, input_dim)
                     else:
-                        den = 1
-                    # Gradient for weights (excluding bias): shape (input_dim, num_perceptrons)
-                    grad_weights = np.dot(inputs_to_use.T, delta) / den
-                    # Gradient for bias: shape (num_perceptrons,)
-                    if delta.ndim>1:
-                        grad_bias = np.mean(delta, axis=0)
-                    else:
-                        grad_bias = np.mean(delta)
-                    # Combine gradients: shape (input_dim + 1, num_perceptrons)
-                    gradients = np.vstack([grad_weights, grad_bias])
-                    # Split gradients for each perceptron in the layer
+                        inputs_to_use = self.network.layers[l - 1].outputs  # Shape: (batch_size, prev_layer_neurons)
+                    
+                    delta = deltas[l]  # Shape: (batch_size, current_layer_neurons)
+                    
+                    # FIX 5: Ensure inputs have bias term for gradient calculation
+                    # Add bias unit to inputs: (batch_size, input_dim + 1)
+                    inputs_with_bias = np.column_stack([inputs_to_use, np.ones(inputs_to_use.shape[0])])
+                    
+                    # FIX 6: Proper gradient calculation
+                    # ∇W = (a_{l-1}^T · δ_l) / batch_size
+                    if delta.ndim == 1:
+                        delta = delta.reshape(-1, 1)  # Ensure 2D
+                    
+                    # Gradient for all weights (including bias)
+                    gradients = np.dot(inputs_with_bias.T, delta) / batch_inputs.shape[0]
+                    
+                    # Split gradients for each perceptron
                     layer_gradients = [gradients[:, i] for i in range(gradients.shape[1])]
                     all_gradients.append(layer_gradients)
                 self.optimizer.update_network(self.network, all_gradients, self.learning_rate)

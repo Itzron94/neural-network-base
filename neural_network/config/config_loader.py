@@ -73,6 +73,7 @@ class ProblemConfig:
     """Configuration for problem-specific settings."""
     type: str = ""
     dataset_path: Optional[str] = None
+    noise_level: float = 0.0
 
 
 @dataclass
@@ -195,7 +196,8 @@ class ConfigLoader:
         
         problem_config = ProblemConfig(
             type=problem_data.get('type', 'xor'),
-            dataset_path=problem_data.get('dataset_path')
+            dataset_path=problem_data.get('dataset_path'),
+            noise_level=problem_data.get('noise_level', 0.0)
         )
 
         return ExperimentConfig(
@@ -263,7 +265,8 @@ class ConfigLoader:
             },
             'problem': {
                 'type': config.problem.type,
-                'dataset_path': config.problem.dataset_path
+                'dataset_path': config.problem.dataset_path,
+                'noise_level': config.problem.noise_level
             }
         }
         

@@ -74,15 +74,16 @@ def load_digit_patterns_for_classification(file_path):
 
 def add_noise_to_patterns(X, noise_level=0.1, seed=None):
     """
-    Add noise to digit patterns by randomly flipping pixels.
+    Add Gaussian noise to digit patterns.
 
     Args:
-        X: Input patterns (N, 35)
-        noise_level: Probability of flipping each pixel (0.0 to 1.0)
+        X: Input patterns (N, 35) - binary patterns with values in {0, 1}
+        noise_level: Standard deviation of Gaussian noise (0.0 to 1.0)
+                    Recommended: 0.1-0.3 for moderate noise
         seed: Random seed for reproducibility
 
     Returns:
-        Noisy patterns
+        Noisy patterns clipped to [0, 1] range
     """
     if seed is not None:
         np.random.seed(seed)
@@ -90,13 +91,14 @@ def add_noise_to_patterns(X, noise_level=0.1, seed=None):
     X_noisy = X.copy()
     num_samples, num_features = X.shape
 
-    # Generate random mask for noise
-    noise_mask = np.random.rand(num_samples, num_features) < noise_level
+    # Add Gaussian noise with mean=0 and std=noise_level
+    gaussian_noise = np.random.normal(0, noise_level, (num_samples, num_features))
+    X_noisy = X_noisy + gaussian_noise
 
-    # Flip bits where noise_mask is True
-    X_noisy[noise_mask] = 1 - X_noisy[noise_mask]
+    # Clip values to [0, 1] range to keep them valid
+    X_noisy = np.clip(X_noisy, 0, 1)
 
-    return X_noisy
+    return X_noisy.astype(np.float32)
 
 
 def print_digit(pattern, digit_label, rows=7, cols=5):
@@ -127,6 +129,10 @@ def train_mlp(problem_type: str, X, y, topology, learning_rate=0.5, epochs=10000
         print(f"\n{'='*60}")
         print(f"TRAINING MLP FOR {problem_type.upper()}")
         print(f"{'='*60}")
+        print("\n  Training on CLEAN DATA ONLY")
+        if extra_data and extra_data.get('X_noisy') is not None:
+            noise_level = extra_data.get('noise_level', 0.0) * 100
+            print(f"  (Noisy data with {noise_level:.1f}% noise will be used for testing)")
 
     if seed is not None:
         np.random.seed(seed)
@@ -240,8 +246,11 @@ def train_mlp(problem_type: str, X, y, topology, learning_rate=0.5, epochs=10000
     print("-"*60)
     print("TRAINING COMPLETE")
     print("-"*60)
+    print("\n" + "="*60)
+    print("POST-TRAINING EVALUATION")
+    print("="*60)
 
-    # Final evaluation
+    print("\n1. Evaluating on CLEAN training data...")
     predictions = network.forward(X, training=False)
 
     if is_multiclass:
@@ -250,12 +259,44 @@ def train_mlp(problem_type: str, X, y, topology, learning_rate=0.5, epochs=10000
         final_accuracy = np.mean(predicted_classes == true_classes) * 100
     else:
         predicted_classes = np.where(predictions > 0.5, 1, 0)
+        true_classes = y
         final_accuracy = np.mean(predicted_classes == y) * 100
 
-    if verbose:
-        print(f"\nFinal Accuracy: {final_accuracy:.2f}%")
+    evaluation_metrics = {
+        'clean_accuracy': final_accuracy
+    }
+    print(f" ✓ Clean Data Accuracy: {final_accuracy:.2f}%")
 
-    return network, loss_history, accuracy_history, final_accuracy
+    # Optional evaluation on noisy data (same labels as clean digits)
+    if extra_data and extra_data.get('X_noisy') is not None:
+        print("\n2. Evaluating on NOISY test data...")
+        X_noisy = extra_data['X_noisy']
+        predictions_noisy = network.forward(X_noisy, training=False)
+
+        if is_multiclass:
+            predicted_classes_noisy = np.argmax(predictions_noisy, axis=1)
+            noisy_accuracy = np.mean(predicted_classes_noisy == true_classes) * 100
+        else:
+            predicted_classes_noisy = np.where(predictions_noisy > 0.5, 1, 0)
+            noisy_accuracy = np.mean(predicted_classes_noisy == y) * 100
+
+        evaluation_metrics['noisy_accuracy'] = noisy_accuracy
+        if extra_data.get('noise_level') is not None:
+            evaluation_metrics['noise_level'] = extra_data['noise_level']
+
+        noise_level = extra_data.get('noise_level', 0.0) * 100
+        print(f" ✓ Noisy Data Accuracy ({noise_level:.1f}% noise): {noisy_accuracy:.2f}%")
+
+        # Calculate accuracy drop
+        accuracy_drop = final_accuracy - noisy_accuracy
+        print(f"\n    Accuracy Drop due to Noise: {accuracy_drop:.2f}%")
+        print(f"    Robustness: {(noisy_accuracy/final_accuracy)*100:.1f}% of clean performance")
+    print("="*60)
+
+    if verbose:
+        print(f"\nEvaluation Complete")
+
+    return network, loss_history, accuracy_history, final_accuracy, evaluation_metrics
 
 
 def print_xor_results(network, X, y):
@@ -613,7 +654,7 @@ def run_experiment_from_config(config_path: str):
         raise ValueError(f"Unknown problem type: {problem_type}")
 
 
-    network, loss_history, accuracy_history, final_accuracy = train_mlp(
+    network, loss_history, accuracy_history, final_accuracy, evaluation_metrics = train_mlp(
         problem_type=problem_type,
         X=X,
         y=y,
@@ -666,11 +707,22 @@ def run_experiment_from_config(config_path: str):
 
     print("\n" + "="*60)
     print("EXPERIMENT SUMMARY:")
+    print("="*60)
     print(f"\n Problem: {problem_type.upper()}")
     print(f" Topology: {config.network.architecture.topology}")
-    print(f" Final Accuracy: {final_accuracy:.2f}%")
+    print(f" Optimizer: {config.training.optimizer.type}")
+    print(f" Learning Rate: {config.training.learning_rate}")
     print(f" Epochs trained: {len(loss_history)}")
-    print(f" Status: {'SOLVED ✓' if final_accuracy >= 90.0 else 'NEEDS IMPROVEMENT'}")
+
+    print(f"\n PERFORMANCE METRICS:")
+    print(f" ├─ Clean Data Accuracy:  {evaluation_metrics['clean_accuracy']:.2f}%")
+    if 'noisy_accuracy' in evaluation_metrics:
+        noise_level = evaluation_metrics.get('noise_level', 0.0) * 100
+        print(f" ├─ Noisy Data Accuracy:  {evaluation_metrics['noisy_accuracy']:.2f}% ({noise_level:.1f}% noise)")
+        accuracy_drop = evaluation_metrics['clean_accuracy'] - evaluation_metrics['noisy_accuracy']
+        robustness = (evaluation_metrics['noisy_accuracy'] / evaluation_metrics['clean_accuracy']) * 100
+        print(f" ├─ Accuracy Drop:        {accuracy_drop:.2f}%")
+        print(f" └─ Robustness Score:     {robustness:.1f}% of clean performance")
 
     print("\nEXPERIMENT COMPLETE!")
     print("="*60 + "\n")

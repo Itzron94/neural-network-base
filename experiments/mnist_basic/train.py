@@ -1,8 +1,9 @@
 # main.py
-
+import matplotlib as plt
 import numpy as np
 import os
 import sys
+import copy
 from pathlib import Path
 # Agregar el directorio raíz al path para imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -37,6 +38,8 @@ def preprocess_data(X, y):
     return X, y_one_hot
 
 
+
+
 def main():
     # Paso 1: Cargar y preprocesar los datos
     print("Cargando datos de MNIST...")
@@ -62,9 +65,39 @@ def main():
     tr = Trainer( learning_rate, epochs, nn,
         softmax_cross_entropy_with_logits, optimizer_config=OptimizerConfig("SGD") )
 
-    # Paso 3: Entrenar la red
+    # Paso 3a Entrenar la red
     print("Entrenando la red neuronal...")
     tr.train(X_train, y_train, batch_size)
+
+    # Crear conjunto de validación (10% de los datos)
+    val_split = 0.1
+    split_idx = int((1 - val_split) * len(X_train))
+    x_train_main, x = X_train[:split_idx], X_train[split_idx:]
+    y_train_main, y = y_train[:split_idx], y_train[split_idx:]
+
+    # Entrenar con validación
+    train_losses, val_losses = tr.train(
+        x_train_main, y_train_main,
+        batch_size=batch_size,
+        verbose=True,
+        X=x,
+        Y=y,
+        patience=10
+    )
+
+    #Paso 3b: graph loss and validation
+    plt.figure(figsize=(8, 5))
+    plt.plot(train_losses, label='Training Loss')
+    plt.plot(val_losses, label='Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Early Stopping - Training vs Validation Loss')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    plots_dir = Path("outputs/plots")
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    plt.savefig(plots_dir / "mnist_early_stopping_loss.png", dpi=300, bbox_inches="tight")
 
     # Paso 4: Evaluar la red en el conjunto de prueba
     print("Evaluando la red en el conjunto de prueba...")

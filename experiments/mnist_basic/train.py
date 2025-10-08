@@ -2,9 +2,7 @@
 import csv
 from datetime import datetime
 import matplotlib.pyplot as plt
-from pathlib import Path
 import time
-import matplotlib as plt
 import numpy as np
 import os
 import sys
@@ -83,8 +81,8 @@ def main():
         x_train_main, y_train_main,
         batch_size=batch_size,
         verbose=True,
-        X=x,
-        Y=y,
+        x_val=x,
+        y_val=y,
         patience=10
     )
 

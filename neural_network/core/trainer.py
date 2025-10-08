@@ -17,7 +17,7 @@ class Trainer:
         self.optimizer: OptimizerFunction = self._create_optimizer(optimizer_config)
 
     def train(self, training_inputs: np.ndarray, training_labels: np.ndarray, batch_size: int = 32, verbose=False,
-              x = None, y = None, patience = 10) -> None:
+              x_val = None, y_val = None, patience = 10) -> None:
         if training_inputs.shape[0] != training_labels.shape[0]:
             raise ValueError("El número de muestras en 'training_inputs' y 'training_labels' debe ser el mismo.")
 
@@ -112,9 +112,9 @@ class Trainer:
             train_losses.append(avg_train_loss)
 
             #validation split
-            if x is not None:
-                y_pred = self.network.forward(x, training = False)
-                val_loss, _ = self.loss_f(y_pred, y)
+            if x_val is not None:
+                y_pred = self.network.forward(x_val, training = False)
+                val_loss, _ = self.loss_f(y_pred, y_val)
                 val_losses.append(val_loss)
 
                 if val_loss < best_val_loss:

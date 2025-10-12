@@ -73,16 +73,16 @@ def main():
     # Crear conjunto de validación (10% de los datos)
     val_split = 0.1
     split_idx = int((1 - val_split) * len(X_train))
-    x_train_main, x = X_train[:split_idx], X_train[split_idx:]
-    y_train_main, y = y_train[:split_idx], y_train[split_idx:]
+    X_train_main, X_val = X_train[:split_idx], X_train[split_idx:]
+    y_train_main, y_val = y_train[:split_idx], y_train[split_idx:]
 
     # Entrenar con validación
     train_losses, val_losses = tr.train(
-        x_train_main, y_train_main,
+        X_train_main, y_train_main,
         batch_size=batch_size,
         verbose=True,
-        x_val=x,
-        y_val=y,
+        x_val=X_val,
+        y_val=y_val,
         patience=10
     )
 
@@ -95,10 +95,10 @@ def main():
     plt.title('Early Stopping - Training vs Validation Loss')
     plt.legend()
     plt.grid(True)
-    plt.show()
     plots_dir = Path("outputs/plots")
     plots_dir.mkdir(parents=True, exist_ok=True)
     plt.savefig(plots_dir / "mnist_early_stopping_loss.png", dpi=300, bbox_inches="tight")
+    plt.show()
 
     # Paso 4: Evaluar la red en el conjunto de prueba
     print("Evaluando la red en el conjunto de prueba...")
@@ -195,8 +195,8 @@ def main():
             X_train_main, y_train_main,
             batch_size=batch_size,
             verbose=False,
-            x=X_val,
-            y=y_val,
+            x_val=X_val,
+            y_val=y_val,
             patience=10
         )
 
@@ -205,7 +205,8 @@ def main():
 
         acc = nn_opt.evaluate(X_test, y_test) * 100
         print(f"{opt['name']} → Precisión: {acc:.2f}%")
-        results.append({"optimizer": opt["name"], "val_loss": val_losses[-1] if val_losses else None, "test_acc": acc})
+        results.append({"optimizer": opt["name"], "val_loss": val_losses[-1] if val_losses else None, "test_acc": acc,
+                        "time_sec": elapsed})
 
         # Comparison plot
         plt.figure(figsize=(7, 5))

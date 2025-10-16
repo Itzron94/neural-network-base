@@ -3,6 +3,8 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import time
 import numpy as np
+import pandas as pd
+import seaborn as sns
 import os
 import sys
 from pathlib import Path
@@ -36,6 +38,7 @@ def main():
     X_train, y_train_labels, X_test, y_test_labels = load_mnist()
     X_train, y_train = preprocess_data(X_train, y_train_labels)
     X_test, y_test = preprocess_data(X_test, y_test_labels)
+    optimizer_histories = {}
 
     # === Parámetros generales ===
     topology = [784, 128, 64, 10]
@@ -109,50 +112,172 @@ def main():
     plt.savefig(plots_dir / "mnist_class_accuracy.png", dpi=300)
     plt.show()
 
-    print("\n=== Comparando optimizadores ===")
-    optimizers = [
+    print("\n=== Comparando optimizadores con varios learning rates===")
+    # === Extended Optimizer + Learning Rate Comparison with CSV Summary ===
+    print("\n=== Comparing optimizers across multiple learning rates ===")
+
+    optimizers_to_test = [
         {"name": "SGD", "config": OptimizerConfig("SGD")},
         {"name": "SGD + Momentum", "config": OptimizerConfig("SGD_MOMENTUM", momentum=0.9)},
         {"name": "Adam", "config": OptimizerConfig("ADAM")},
     ]
 
-    results = []
+    learning_rates = [0.1, 0.001, 0.0001]
+    epochs = 5000
+    batch_size = 32
+    patience = 50
 
-    for opt in optimizers:
-        print(f"Entrenando con {opt['name']}...")
-        net = NeuralNetwork(topology, activation_type, dropout_rate)
-        trainer = Trainer(learning_rate, epochs, net, softmax_cross_entropy_with_logits, opt["config"])
+    plots_dir = Path("outputs/plots")
+    plots_dir.mkdir(parents=True, exist_ok=True)
 
-        t0 = time.perf_counter()
-        train_losses, val_losses = trainer.train(
-            X_train_main, y_train_main,
-            batch_size=batch_size,
-            x_val=X_val, y_val=y_val,
-            verbose=False, patience=10
-        )
-        elapsed = time.perf_counter() - t0
+    optimizer_histories = []
+    summary_rows = []
 
-        acc = net.evaluate(X_test, y_test) * 100
-        print(f"  → Precisión: {acc:.2f}%, Tiempo: {elapsed:.2f}s")
-        results.append({"optimizer": opt["name"], "test_acc": acc, "val_loss": val_losses[-1], "time_sec": elapsed})
+    for opt in optimizers_to_test:
+        for lr in learning_rates:
+            label = f"{opt['name']} (lr={lr})"
+            print(f"\n--- Training {label} ---")
 
-    # Bar plot de comparativa
-    plt.figure(figsize=(7, 5))
-    names = [r["optimizer"] for r in results]
-    accs = [r["test_acc"] for r in results]
-    plt.bar(names, accs, color=["#e74c3c", "#3498db", "#2ecc71"], edgecolor="black")
-    plt.ylabel("Precisión en test (%)")
-    plt.title("Comparación de optimizadores")
-    plt.ylim(0, 100); plt.grid(axis="y")
+            nn_opt = NeuralNetwork(topology=topology, activation_type=activation_type, dropout_rate=dropout_rate)
+            tr_opt = Trainer(
+                learning_rate=lr,
+                epochs=epochs,
+                network=nn_opt,
+                loss_func=softmax_cross_entropy_with_logits,
+                optimizer_config=opt["config"]
+            )
+
+            start_time = time.perf_counter()
+            train_losses, val_losses = tr_opt.train(
+                X_train_main, y_train_main,
+                batch_size=batch_size,
+                verbose=False,
+                x_val=X_val,
+                y_val=y_val,
+                patience=patience
+            )
+            end_time = time.perf_counter()
+            elapsed = end_time - start_time
+
+            # Compute test accuracy
+            test_acc = nn_opt.evaluate(X_test, y_test) * 100
+
+            # Compute accuracy per epoch (train and val)
+            train_acc_hist, val_acc_hist = [], []
+            for i in range(len(train_losses)):
+                preds_train = nn_opt.forward(X_train_main)
+                preds_val = nn_opt.forward(X_val)
+                train_acc = np.mean(np.argmax(preds_train, axis=1) == np.argmax(y_train_main, axis=1)) * 100
+                val_acc = np.mean(np.argmax(preds_val, axis=1) == np.argmax(y_val, axis=1)) * 100
+                train_acc_hist.append(train_acc)
+                val_acc_hist.append(val_acc)
+
+            optimizer_histories.append({
+                "optimizer": opt["name"],
+                "lr": lr,
+                "train_losses": train_losses,
+                "val_losses": val_losses,
+                "train_acc": train_acc_hist,
+                "val_acc": val_acc_hist,
+                "test_acc": test_acc,
+                "best_val_loss": min(val_losses) if len(val_losses) > 0 else None,
+                "time_sec": elapsed
+            })
+
+            summary_rows.append({
+                "Optimizer": opt["name"],
+                "Learning Rate": lr,
+                "Best Val Loss": min(val_losses) if len(val_losses) > 0 else None,
+                "Final Test Accuracy (%)": test_acc,
+                "Training Time (s)": round(elapsed, 2)
+            })
+
+    # === Create summary CSV ===
+    summary_csv = Path("outputs/optimizer_summary.csv")
+    with open(summary_csv, mode="w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=summary_rows[0].keys())
+        writer.writeheader()
+        writer.writerows(summary_rows)
+    print(f"\n✅ Summary CSV saved at: {summary_csv.resolve()}")
+
+    # === Plot loss curves (all optimizers + all LRs) ===
+    plt.figure(figsize=(12, 7))
+    for hist in optimizer_histories:
+        label = f"{hist['optimizer']} (lr={hist['lr']})"
+        plt.plot(hist["train_losses"], label=f"{label} - Train", linestyle='-')
+        plt.plot(hist["val_losses"], label=f"{label} - Val", linestyle='--')
+    plt.title("Training and Validation Loss vs Epochs (All Optimizers & Learning Rates)")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss (Cross-Entropy)")
+    plt.legend(fontsize=7)
+    plt.grid(True)
     plt.tight_layout()
-    plt.savefig(plots_dir / "mnist_optimizer_comparison.png", dpi=300)
+    plt.savefig(plots_dir / "optimizer_lr_loss_comparison.png", dpi=300, bbox_inches="tight")
     plt.show()
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_path = results_dir / f"mnist_optimizer_results_{timestamp}.csv"
-    with open(csv_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["optimizer", "test_acc", "val_loss", "time_sec"])
-        writer.writeheader(); writer.writerows(results)
+    # === Plot accuracy curves (all optimizers + all LRs) ===
+    plt.figure(figsize=(12, 7))
+    for hist in optimizer_histories:
+        label = f"{hist['optimizer']} (lr={hist['lr']})"
+        plt.plot(hist["train_acc"], label=f"{label} - Train", linestyle='-')
+        plt.plot(hist["val_acc"], label=f"{label} - Val", linestyle='--')
+    plt.title("Training and Validation Accuracy vs Epochs (All Optimizers & Learning Rates)")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy (%)")
+    plt.legend(fontsize=7)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(plots_dir / "optimizer_lr_accuracy_comparison.png", dpi=300, bbox_inches="tight")
+    plt.show()
+
+    # === Plot ONLY lr = 0.1 comparison (for clarity) ===
+    plt.figure(figsize=(12, 7))
+    for hist in optimizer_histories:
+        if hist["lr"] == 0.1:
+            label = f"{hist['optimizer']} (lr={hist['lr']})"
+            plt.plot(hist["train_losses"], label=f"{label} - Train", linestyle='-')
+            plt.plot(hist["val_losses"], label=f"{label} - Val", linestyle='--')
+    plt.title("Training and Validation Loss vs Epochs (LR = 0.1 Only)")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss (Cross-Entropy)")
+    plt.legend(fontsize=9)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(plots_dir / "optimizer_lr0.1_loss_comparison.png", dpi=300, bbox_inches="tight")
+    plt.show()
+
+    summary_csv = Path("outputs/optimizer_summary.csv")
+    with open(summary_csv, mode="w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=summary_rows[0].keys())
+        writer.writeheader()
+        writer.writerows(summary_rows)
+    print(f"\n✅ Summary CSV saved at: {summary_csv.resolve()}")
+
+    # === Load summary CSV and create heatmaps ===
+    summary_csv = Path("outputs/optimizer_summary.csv")
+    df_summary = pd.read_csv(summary_csv)
+
+    # Pivot for heatmap (Optimizers as rows, Learning Rates as columns)
+    df_acc = df_summary.pivot(index="Optimizer", columns="Learning Rate", values="Final Test Accuracy (%)")
+    df_loss = df_summary.pivot(index="Optimizer", columns="Learning Rate", values="Best Val Loss")
+
+    plt.figure(figsize=(8, 5))
+    sns.heatmap(df_acc, annot=True, fmt=".2f", cmap="YlGnBu", cbar_kws={"label": "Test Accuracy (%)"})
+    plt.title("Optimizer vs Learning Rate — Test Accuracy (%)")
+    plt.xlabel("Learning Rate")
+    plt.ylabel("Optimizer")
+    plt.tight_layout()
+    plt.savefig(plots_dir / "optimizer_lr_accuracy_heatmap.png", dpi=300, bbox_inches="tight")
+    plt.show()
+
+    plt.figure(figsize=(8, 5))
+    sns.heatmap(df_loss, annot=True, fmt=".4f", cmap="YlOrRd_r", cbar_kws={"label": "Best Validation Loss"})
+    plt.title("Optimizer vs Learning Rate — Best Validation Loss")
+    plt.xlabel("Learning Rate")
+    plt.ylabel("Optimizer")
+    plt.tight_layout()
+    plt.savefig(plots_dir / "optimizer_lr_loss_heatmap.png", dpi=300, bbox_inches="tight")
+    plt.show()
 
     print(f"\nResultados guardados en: {csv_path}")
 

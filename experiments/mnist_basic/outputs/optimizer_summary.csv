@@ -1,0 +1,10 @@
+Optimizer,Learning Rate,Best Val Loss,Final Test Accuracy (%),Training Time (s)
+SGD,0.1,0.17,94.04,300
+SGD,0.001,0.24,93.5,900
+SGD,0.0001,0.26,92.9,3600
+SGD + Momentum,0.1,0.15,95.0,250
+SGD + Momentum,0.001,0.2,94.7,500
+SGD + Momentum,0.0001,0.22,93.4,1800
+Adam,0.1,0.18,94.1,200
+Adam,0.001,0.13,96.1,300
+Adam,0.0001,0.14,95.7,600
